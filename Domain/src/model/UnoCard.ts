@@ -11,24 +11,31 @@ export type NumberedCard = {
 export type SkipCard = {
   type: "SKIP";
   color: Color;
+  value: 20;
 };
 
 export type ReverseCard = {
   type: "REVERSE";
   color: Color;
+  value: 20;
 };
 
 export type DrawTwoCard = {
   type: "DRAW";
   color: Color;
+  value: 20;
 };
 
-export type WildCard = {
-  type: "WILD";
+export type WildCard = { 
+  type: "WILD"; 
+  color?: Color 
+  value: 50;
 };
 
-export type WildDrawCard = {
-  type: "WILD DRAW";
+export type WildDrawCard = { 
+  type: "WILD DRAW"; 
+  color?: Color 
+  value: 50;
 };
 
 export type Card =
