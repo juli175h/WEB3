@@ -1,5 +1,6 @@
 
 import { standardShuffler } from "../utils/random_utils"
+import type { Card, NumberedCard, WildCard, ReverseCard, SkipCard, DrawTwoCard, WildDrawCard, Color } from "../model/UnoCard"
 
 export const colors: Color[] = ["RED", "BLUE", "GREEN", "YELLOW"]
 
@@ -50,4 +51,68 @@ export function createInitialDeck(): Deck {
   }
 }
 
+export class DrawPile implements Deck {
+  cards: Card[]
 
+  constructor(cards: Card[]) {
+    this.cards = cards
+  }
+
+  shuffle() {
+    standardShuffler(this.cards)
+  }
+
+  deal(): Card | undefined {
+    return this.cards.shift()
+  }
+
+  get size() {
+    return this.cards.length
+  }
+
+}
+
+export class Hand implements Deck {
+  cards: Card[]
+
+  constructor(cards: Card[]) {
+    this.cards = cards
+  }
+
+  shuffle() {
+    standardShuffler(this.cards)
+  }
+
+  add(card: Card) {
+    this.cards.push(card)
+  }
+
+  play(card: Card) {
+    const index = this.cards.indexOf(card)
+    if (index !== -1) this.cards.splice(index, 1)
+  }
+
+  get size() {
+    return this.cards.length
+  }
+}
+
+export class DiscardPile implements Deck {
+  cards: Card[] = []
+
+  shuffle() {
+    
+  }
+
+  add(card: Card) {
+    this.cards.push(card)
+  }
+
+  top(): Card | undefined {
+    return this.cards[this.cards.length - 1]
+  }
+
+  size() {
+    return this.cards.length
+  }
+}
