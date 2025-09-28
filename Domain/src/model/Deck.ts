@@ -69,14 +69,23 @@ export class DrawPile implements Deck {
   get size() {
     return this.cards.length
   }
+   add(card: Card) {
+    this.cards.push(card)
+  }
 
 }
 
 export class Hand implements Deck {
   cards: Card[]
+  
 
   constructor(cards: Card[]) {
     this.cards = cards
+
+    
+  }
+   get length(): number {
+    return this.cards.length
   }
 
   shuffle() {

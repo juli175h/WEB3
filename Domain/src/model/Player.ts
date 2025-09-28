@@ -5,11 +5,17 @@ import { createEmptyDeck, DrawPile, DiscardPile, Hand } from "./deck"
 export class Player {
   readonly id: number
   readonly name: string
-  readonly hand: Hand
+  hand: Hand
+  score : number
 
   constructor(id: number, name: string) {
     this.id = id
     this.name = name
+    this.score = 0
+    this.hand = new Hand(createEmptyDeck().cards)
+  }
+
+    resetHand(): void {
     this.hand = new Hand(createEmptyDeck().cards)
   }
 
