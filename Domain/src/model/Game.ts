@@ -7,6 +7,8 @@ let discardPile: DiscardPile
 let players: Player[]
 let currentPlayer: Player
 
+let currentPlayerIndex = 0
+let playDirection = 1 // 1 = clockwise, -1 = counter-clockwise
 
 function initializeGame(initialPlayers: Player[]): void {
   players = initialPlayers
@@ -31,9 +33,90 @@ if (card) {
 }
 
 
-function Round(){
-    
+
+function nextPlayer() {
+  currentPlayerIndex = (currentPlayerIndex + playDirection + players.length) % players.length
+  currentPlayer = players[currentPlayerIndex]
 }
+
+function applyCardEffect(card: Card) {
+  switch(card.type) {
+    case "SKIP":
+      nextPlayer() // skip the next player
+      break
+    case "REVERSE":
+      playDirection *= -1
+      break
+    case "DRAW":
+      nextPlayer()
+      currentPlayer.draw(drawPile, 2)
+      break
+    case "WILD DRAW":
+      nextPlayer()
+      currentPlayer.draw(drawPile, 4)
+      break
+    case "WILD":
+      // optionally handle color choice logic
+      break
+  }
+}
+
+function playCard(player: Player, card: Card) {
+  if (!IsLegalCard(card, discardPile.top())) {
+    throw new Error("Illegal move")
+  }
+
+  // Remove card from player's hand
+  player.playCard(card)
+  // Place card on discard pile
+  discardPile.add(card)
+  // Apply effects
+  applyCardEffect(card)
+  // Move to next player
+  nextPlayer()
+}
+
+function drawCard(player: Player) {
+  const card = drawPile.deal()
+  if (card) {
+    player.hand.push(card)
+  }
+}
+
+// Main game loop for a round
+function Round() {
+  while (!isGameOver()) {
+    console.log(`Current Player: ${currentPlayer.name}`)
+    const playableCard = currentPlayer.hand.find(c => IsLegalCard(c, discardPile.topCard()))
+    
+    if (playableCard) {
+      playCard(currentPlayer, playableCard)
+    } else {
+      drawCard(currentPlayer)
+      // optional: allow player to play drawn card immediately
+      const newCard = currentPlayer.hand[currentPlayer.hand.length - 1]
+      if (IsLegalCard(newCard, discardPile.topCard())) {
+        playCard(currentPlayer, newCard)
+      } else {
+        nextPlayer()
+      }
+    }
+  }
+
+  announceWinner()
+}
+
+function isGameOver(): boolean {
+  return players.some(player => player.hand.length === 0)
+}
+
+function announceWinner() {
+  const winner = players.find(player => player.hand.length === 0)
+  if (winner) {
+    console.log(`🎉 ${winner.name} wins the game!`)
+  }
+}
+
 
 
 function IsLegalCard(playerCard:Card, topCard:Card){
