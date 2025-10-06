@@ -1,47 +1,37 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+import {RouterView} from 'vue-router'
+
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
+  <h1 class="header">UNO!!!!!!!!!</h1>
+  <hr></hr>
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-    </div>
-  </header>
-
-  <main>
-    <TheWelcome />
-  </main>
+  <RouterView/>
 </template>
 
-<style scoped>
-header {
-  line-height: 1.5;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
+<style>
+  #app {
+    background-color: rgb(243, 244, 245);
+    margin: 10px;
+    padding: 0.6rem;
+    overflow: auto;
   }
-
-  .logo {
-    margin: 0 2rem 0 0;
+  html {
+    height: 100%;
   }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
+  body {
+    width: 1024px;
+    height: 100%;
+    margin: 0 auto;
+    background-color:rgb(20, 30, 47);
   }
-}
+  nav {
+    margin-left: 5%;
+    float: right;
+  }
+  .link {
+    margin: .3rem;
+    display: block;
+  }
 </style>
