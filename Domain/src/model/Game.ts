@@ -104,7 +104,7 @@ function drawCard(player: Player) {
 
 
 
-function Round(): Player | null {
+function Round(): Player | null {//Maybe should be in server
  /* while (!isRoundOver()) {
     const playableCard = currentPlayer.hand.find(c =>
       IsLegalCard(c, discardPile.top())

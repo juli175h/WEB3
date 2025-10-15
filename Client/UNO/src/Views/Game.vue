@@ -6,6 +6,7 @@
   import { computed, ref, watch } from 'vue';
   import {usePlayerStore} from '@/stores/player_store';
   import Page from '@/components/Page.vue';
+  import { Card } from '../components/Card.vue';
 
   const ongoingGameStore = useOngoingGamesStore()
   const playerStore = usePlayerStore()
@@ -39,7 +40,7 @@
         <h1>Game #{{id}} </h1>
       </div>
       <ScoreCard class="card" :game="game" :player="playerStore.player" :enabled="enabled"/>
-      <DiceRoll v-if="!finished" class ="roll" :game="game" :player="playerStore.player" :enabled="enabled"/>
+      <Card/>
       <div v-if="finished" class="scoreboard">
         <table>
           <thead><tr><td>Player</td><td>Score</td></tr></thead>
