@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "es2017",          // or "es2015"
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "strict": true,
+    "downlevelIteration": true   // allows for..of over Set and Map
+  }
+}
