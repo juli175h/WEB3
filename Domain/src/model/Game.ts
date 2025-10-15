@@ -184,3 +184,14 @@ function IsLegalCard(playerCard: Card, topCard?: Card) {
 
   return false
 }
+
+export {
+  initializeGame,
+  drawCard,
+  playCard,
+  nextPlayer,
+  currentPlayer,
+  discardPile,
+  drawPile,
+  chooseColor
+};
