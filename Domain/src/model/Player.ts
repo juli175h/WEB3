@@ -1,10 +1,9 @@
-
 import type { Card } from "./UnoCard"
 import { createEmptyDeck, DrawPile, DiscardPile, Hand } from "./deck"
 
 export class Player {
-  readonly id: number
-  readonly name: string
+  id: number
+  name: string
   hand: Hand
   score : number
 
@@ -15,7 +14,7 @@ export class Player {
     this.hand = new Hand(createEmptyDeck().cards)
   }
 
-    resetHand(): void {
+  resetHand(): void {
     this.hand = new Hand(createEmptyDeck().cards)
   }
 
