@@ -1,7 +1,5 @@
-// gameserver.ts
 import express from "express";
 import http from "http";
-import bodyParser from "body-parser";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import { ApolloServer } from "@apollo/server";
@@ -28,17 +26,14 @@ async function start() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
   const app = express();
-  app.use("/graphql", bodyParser.json());
 
-  app.use(
-    cors({
-      origin: /:\/\/localhost:/,
-      methods: ["GET", "POST", "OPTIONS"],
-    })
-  );
+  // ✅ Middleware order matters
+  app.use(cors({ origin: /:\/\/localhost:/, methods: ["GET", "POST", "OPTIONS"] }));
+  app.use(express.json()); // use express built-in JSON parser
 
   const httpServer = http.createServer(app);
 
+  // WebSocket server
   const wsServer = new WebSocketServer({ server: httpServer });
   const serverCleanup = useServer({ schema }, wsServer);
 
@@ -48,19 +43,23 @@ async function start() {
       ApolloServerPluginDrainHttpServer({ httpServer }),
       {
         async serverWillStart() {
-          return { drainServer: async () => serverCleanup.dispose() };
+          return {
+            drainServer: async () => serverCleanup.dispose(),
+          };
         },
       },
     ],
   });
 
   await apollo.start();
+
+  // mount Apollo middleware after JSON & CORS
   app.use("/graphql", expressMiddleware(apollo));
 
   const PORT = 4000;
-  httpServer.listen(PORT, () =>
-    console.log(`Uno GraphQL on http://localhost:${PORT}/graphql`)
-  );
+  httpServer.listen(PORT, () => {
+    console.log(`Uno GraphQL server running at http://localhost:${PORT}/graphql`);
+  });
 }
 
 start().catch(err => {
