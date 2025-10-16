@@ -1,89 +1,60 @@
-import { ServerResponse } from "./response";
-import { GameStore, IndexedUno, PendingGame, ServerError } from "./serverModel";
-import { ServerModel } from "./serverModel";
-import { Broadcaster } from "./broadcaster";
-
+// api.ts
+import { PubSub } from "graphql-subscriptions";
+import { Color } from "../../domain/src/model/UnoCard";
+import { ServerModel, IndexedUno, PendingGame } from "./serverModel";
 
 export type API = {
-  new_game: (creator: string, number_of_players: number) => Promise<ServerResponse<IndexedUno | PendingGame, ServerError>>;
-  pending_games: () => Promise<ServerResponse<PendingGame[], ServerError>>;
-  pending_game: (id: string) => Promise<ServerResponse<PendingGame, ServerError>>;
-  join: (id: string, player: string) => Promise<ServerResponse<IndexedUno | PendingGame, ServerError>>;
-  games: () => Promise<ServerResponse<IndexedUno[], ServerError>>;
-  game: (id: string) => Promise<ServerResponse<IndexedUno, ServerError>>;
-  play_card: (id: string, player: string, cardIndex: number) => Promise<ServerResponse<IndexedUno, ServerError>>;
-  draw_card: (id: string, player: string) => Promise<ServerResponse<IndexedUno, ServerError>>;
+  new_game(creator: string, number_of_players: number): Promise<IndexedUno | PendingGame>;
+  pending_games(): Promise<PendingGame[]>;
+  pending_game(id: string): Promise<PendingGame | undefined>;
+  join(id: string, player: string): Promise<IndexedUno | PendingGame>;
+  games(): Promise<IndexedUno[]>;
+  game(id: string): Promise<IndexedUno | undefined>;
+  draw(id: string, player: string): Promise<IndexedUno>;
+  play(id: string, player: string, handIndex: number, chosenColor?: Color): Promise<IndexedUno>;
 };
 
-/**
- * Factory function to create the UNO API instance.
- * @param broadcaster Sends updates to all connected clients.
- * @param store Game storage implementation (in-memory or database-backed).
- */
-export const create_api = (broadcaster: Broadcaster, store: GameStore): API => {
-  const server = new ServerModel(store);
-
-  // Create new pending UNO game
-  async function new_game(creator: string, number_of_players: number) {
-    const newGame = await server.add(creator, number_of_players);
-    await newGame.process(broadcast);
-    return newGame;
+export function create_api(pubsub: PubSub, server: ServerModel): API {
+  async function broadcast(game: IndexedUno | PendingGame) {
+    if ((game as any).pending) pubsub.publish("PENDING_UPDATED", { pending: game });
+    else pubsub.publish("ACTIVE_UPDATED", { active: toGraphQL(game as IndexedUno) });
   }
 
-  // List all active or finished games
-  async function games() {
-    return server.all_games();
-  }
-
-  // Get a specific game by ID
-  async function game(id: string) {
-    return server.game(id);
-  }
-
-  // List pending games waiting for players
-  async function pending_games() {
-    return server.all_pending_games();
-  }
-
-  // Get a specific pending game
-  async function pending_game(id: string) {
-    return server.pending_game(id);
-  }
-
-  // Join an existing pending game
-  async function join(id: string, player: string) {
-    const joined = await server.join(id, player);
-    await joined.process(broadcast);
-    return joined;
-  }
-
-  // Play a card
-  async function play_card(id: string, player: string, cardIndex: number) {
-    const game = await server.play_card(id, player, cardIndex);
-    await game.process(broadcast);
-    return game;
-  }
-
-  // Draw a card
-  async function draw_card(id: string, player: string) {
-    const game = await server.draw_card(id, player);
-    await game.process(broadcast);
-    return game;
-  }
-
-  // Broadcast helper
-  async function broadcast(game: IndexedUno | PendingGame): Promise<void> {
-    await broadcaster.send(game);
-  }
+  const toGraphQL = (g: IndexedUno) => ({
+    id: g["id"],
+    pending: false,
+    players: g.toPublic().players,
+    currentPlayerIndex: g.toPublic().currentPlayerIndex,
+    direction: g.toPublic().direction,
+    discardTop: g.toPublic().discardTop,
+    drawPileCount: g.toPublic().drawPileCount,
+    me: (_: any, { player }: { player: string }) => g.me(player),
+  });
 
   return {
-    new_game,
-    pending_games,
-    pending_game,
-    join,
-    games,
-    game,
-    play_card,
-    draw_card,
+    async new_game(creator, n) {
+      const pg = await server.add(creator, n);
+      await broadcast(pg);
+      return pg;
+    },
+    pending_games: () => server.pending_games(),
+    pending_game: (id) => server.pending_game(id),
+    async join(id, player) {
+      const res = await server.join(id, player);
+      await broadcast(res as any);
+      return res as any;
+    },
+    games: () => server.games(),
+    game: (id) => server.game(id),
+    async draw(id, player) {
+      const g = await server.draw(id, player);
+      await broadcast(g);
+      return g;
+    },
+    async play(id, player, handIndex, chosenColor) {
+      const g = await server.play(id, player, handIndex, chosenColor);
+      await broadcast(g);
+      return g;
+    }
   };
-};
+}

@@ -1,0 +1,118 @@
+#graphql
+scalar JSON
+
+enum Color {
+  RED
+  BLUE
+  GREEN
+  YELLOW
+}
+
+"Base interface that all Uno cards share"
+interface Card {
+  type: String!
+  color: Color
+  value: Int
+}
+
+type NumberedCard implements Card {
+  type: String!
+  color: Color!
+  value: Int!
+}
+
+type SkipCard implements Card {
+  type: String!
+  color: Color!
+  value: Int!
+}
+
+type ReverseCard implements Card {
+  type: String!
+  color: Color!
+  value: Int!
+}
+
+type DrawTwoCard implements Card {
+  type: String!
+  color: Color!
+  value: Int!
+}
+
+type WildCard implements Card {
+  type: String!
+  color: Color
+  value: Int!
+}
+
+type WildDrawCard implements Card {
+  type: String!
+  color: Color
+  value: Int!
+}
+
+"Union representing any possible Uno card"
+union AnyCard =
+    NumberedCard
+  | SkipCard
+  | ReverseCard
+  | DrawTwoCard
+  | WildCard
+  | WildDrawCard
+
+type PublicPlayer {
+  id: Int!
+  name: String!
+  handCount: Int!
+}
+
+type PrivatePlayer {
+  id: Int!
+  name: String!
+  hand: [AnyCard!]!
+}
+
+type ActiveGame {
+  id: ID!
+  pending: Boolean!
+  players: [PublicPlayer!]!
+  currentPlayerIndex: Int!
+  direction: Int!
+  discardTop: AnyCard
+  drawPileCount: Int!
+  me(player: String!): PrivatePlayer
+}
+
+type PendingGame {
+  id: ID!
+  pending: Boolean!
+  creator: String!
+  number_of_players: Int!
+  players: [String!]!
+}
+
+union Game = ActiveGame | PendingGame
+
+type Query {
+  games: [ActiveGame!]!
+  game(id: ID!): ActiveGame
+  pending_games: [PendingGame!]!
+  pending_game(id: ID!): PendingGame
+}
+
+type Mutation {
+  new_game(creator: String!, number_of_players: Int!): Game!
+  join(id: ID!, player: String!): Game!
+  draw(id: ID!, player: String!): ActiveGame!
+  playCardByIndex(
+    id: ID!
+    player: String!
+    handIndex: Int!
+    chosenColor: Color
+  ): ActiveGame!
+}
+
+type Subscription {
+  active: ActiveGame!
+  pending: PendingGame!
+}

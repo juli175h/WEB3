@@ -1,50 +1,69 @@
-import { WebSocketServer, WebSocket } from "ws";
-import { Broadcaster } from "./broadcaster";
-import { IndexedUno, PendingGame } from "./serverModel";
+// gameserver.ts
+import express from "express";
+import http from "http";
+import bodyParser from "body-parser";
+import cors from "cors";
+import { WebSocketServer } from "ws";
+import { ApolloServer } from "@apollo/server";
+import { expressMiddleware } from "@as-integrations/express4";
+import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
+import { makeExecutableSchema } from "@graphql-tools/schema";
+import { useServer } from "graphql-ws/use/ws";
+import { PubSub } from "graphql-subscriptions";
+import { readFile } from "fs/promises";
 
-/**
- * In-memory set of connected WebSocket clients
- */
-const clients = new Set<WebSocket>();
+import { MemoryStore } from "./memorystore";
+import { ServerModel } from "./serverModel";
+import { create_api } from "./api";
+import { create_resolvers } from "./resolvers";
 
-/**
- * Broadcaster implementation: sends game updates to all connected clients
- */
-export const broadcaster: Broadcaster = {
-  async send(message: IndexedUno | PendingGame) {
-    const serialized = JSON.stringify(message);
-    for (const client of clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(serialized);
-      }
-    }
-  },
-};
+async function start() {
+  const pubsub = new PubSub();
+  const store = new MemoryStore();
+  const serverModel = new ServerModel(store);
+  const api = create_api(pubsub, serverModel);
 
-/**
- * Start the WebSocket game server
- */
-export function startGameServer(port: number = 8081) {
-  const wss = new WebSocketServer({ port });
-  console.log(`🟢 UNO GameServer listening on ws://localhost:${port}`);
+  const typeDefs = `#graphql\n${await readFile("./uno.sdl", "utf8")}`;
+  const resolvers = create_resolvers(pubsub, api);
+  const schema = makeExecutableSchema({ typeDefs, resolvers });
 
-  wss.on("connection", (ws: WebSocket) => {
-    clients.add(ws);
-    console.log("Client connected. Total clients:", clients.size);
+  const app = express();
+  app.use("/graphql", bodyParser.json());
 
-    ws.on("close", () => {
-      clients.delete(ws);
-      console.log("Client disconnected. Total clients:", clients.size);
-    });
+  app.use(
+    cors({
+      origin: /:\/\/localhost:/,
+      methods: ["GET", "POST", "OPTIONS"],
+    })
+  );
 
-    ws.on("message", (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        // For now, just log incoming messages
-        console.log("Received from client:", msg);
-      } catch (err) {
-        console.error("Invalid JSON received:", data.toString());
-      }
-    });
+  const httpServer = http.createServer(app);
+
+  const wsServer = new WebSocketServer({ server: httpServer });
+  const serverCleanup = useServer({ schema }, wsServer);
+
+  const apollo = new ApolloServer({
+    schema,
+    plugins: [
+      ApolloServerPluginDrainHttpServer({ httpServer }),
+      {
+        async serverWillStart() {
+          return { drainServer: async () => serverCleanup.dispose() };
+        },
+      },
+    ],
   });
+
+  await apollo.start();
+  app.use("/graphql", expressMiddleware(apollo));
+
+  const PORT = 4000;
+  httpServer.listen(PORT, () =>
+    console.log(`Uno GraphQL on http://localhost:${PORT}/graphql`)
+  );
 }
+
+start().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
