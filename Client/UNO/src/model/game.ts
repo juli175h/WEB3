@@ -5,22 +5,27 @@ import type { Color, Card } from "../../../../Domain/src/model/UnoCard";
 export type PublicPlayer = {
   id: number;
   name: string;
+  score: number;
   handCount: number;
 };
 
 export type IndexedUno = {
   id: string;
-  pending: boolean; // GraphQL sends a boolean
+  pending: boolean;
+  finished: boolean;
+  winner?: PublicPlayer | null;
   players: PublicPlayer[];
-  currentPlayerIndex: number;
-  direction: number;
-  discardTop?: Card;
-  drawPileCount: number;
+  currentRound: {
+    currentPlayerIndex: number;
+    direction: number;
+    discardTop?: Card;
+    drawPileCount: number;
+  };
 };
 
 export type PendingUno = {
   id: string;
-  pending: boolean; // changed from literal `true`
+  pending: boolean;
   creator: string;
   number_of_players: number;
   players: string[];
@@ -31,21 +36,24 @@ export type PendingUno = {
 type GraphQlGame = {
   id: string;
   pending: boolean;
-  players: { id: number; name: string; handCount: number }[];
-  currentPlayerIndex: number;
-  direction: number;
-  discardTop?: Card;
-  drawPileCount: number;
+  finished: boolean;
+  winner?: PublicPlayer | null;
+  players: PublicPlayer[];
+  currentRound: {
+    currentPlayerIndex: number;
+    direction: number;
+    discardTop?: Card;
+    drawPileCount: number;
+  };
 };
 
 export function from_graphql_game(g: GraphQlGame): IndexedUno {
   return {
     id: g.id,
     pending: g.pending,
+    finished: g.finished,
+    winner: g.winner,
     players: g.players,
-    currentPlayerIndex: g.currentPlayerIndex,
-    direction: g.direction,
-    discardTop: g.discardTop,
-    drawPileCount: g.drawPileCount,
+    currentRound: g.currentRound,
   };
 }

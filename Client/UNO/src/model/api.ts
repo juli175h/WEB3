@@ -51,6 +51,7 @@ async function query<T>(query: DocumentNode, variables?: any): Promise<T> {
     variables,
     fetchPolicy: "network-only",
   });
+  if (!res.data) throw new Error("No data returned from query");
   return res.data;
 }
 
@@ -60,31 +61,18 @@ async function mutate<T>(mutation: DocumentNode, variables?: any): Promise<T> {
     variables,
     fetchPolicy: "network-only",
   });
-  return res.data!;
+  if (!res.data) throw new Error("No data returned from mutation");
+  return res.data;
 }
 
 /* ---------------- Subscriptions ---------------- */
 
 interface ActiveSubscriptionResult {
-  active: {
-    id: string;
-    pending: boolean;
-    players: { id: number; name: string; handCount: number }[];
-    currentPlayerIndex: number;
-    direction: number;
-    discardTop?: any;
-    drawPileCount: number;
-  };
+  active: any;
 }
 
 interface PendingSubscriptionResult {
-  pending: {
-    id: string;
-    pending: boolean;
-    creator: string;
-    players: string[];
-    number_of_players: number;
-  };
+  pending: PendingUno;
 }
 
 export async function onActive(subscriber: (g: IndexedUno) => any) {
@@ -93,11 +81,15 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
       active {
         id
         pending
-        players { id name handCount }
-        currentPlayerIndex
-        direction
-        discardTop { __typename type color value }
-        drawPileCount
+        finished
+        winner { id name score handCount }
+        players { id name score handCount }
+        currentRound {
+          currentPlayerIndex
+          direction
+          discardTop { __typename type color value }
+          drawPileCount
+        }
       }
     }
   `;
@@ -163,11 +155,15 @@ export async function games(): Promise<IndexedUno[]> {
         games {
           id
           pending
-          players { id name handCount }
-          currentPlayerIndex
-          direction
-          discardTop { __typename type color value }
-          drawPileCount
+          finished
+          winner { id name score handCount }
+          players { id name score handCount }
+          currentRound {
+            currentPlayerIndex
+            direction
+            discardTop { __typename type color value }
+            drawPileCount
+          }
         }
       }
     `
@@ -182,11 +178,15 @@ export async function game(id: string): Promise<IndexedUno | undefined> {
         game(id: $id) {
           id
           pending
-          players { id name handCount }
-          currentPlayerIndex
-          direction
-          discardTop { __typename type color value }
-          drawPileCount
+          finished
+          winner { id name score handCount }
+          players { id name score handCount }
+          currentRound {
+            currentPlayerIndex
+            direction
+            discardTop { __typename type color value }
+            drawPileCount
+          }
         }
       }
     `,
@@ -266,11 +266,15 @@ export async function new_game(
           ... on ActiveGame {
             id
             pending
-            players { id name handCount }
-            currentPlayerIndex
-            direction
-            discardTop { __typename type color value }
-            drawPileCount
+            finished
+            winner { id name score handCount }
+            players { id name score handCount }
+            currentRound {
+              currentPlayerIndex
+              direction
+              discardTop { __typename type color value }
+              drawPileCount
+            }
           }
         }
       }
@@ -297,11 +301,15 @@ export async function join(game: PendingUno, player: string) {
           ... on ActiveGame {
             id
             pending
-            players { id name handCount }
-            currentPlayerIndex
-            direction
-            discardTop { __typename type color value }
-            drawPileCount
+            finished
+            winner { id name score handCount }
+            players { id name score handCount }
+            currentRound {
+              currentPlayerIndex
+              direction
+              discardTop { __typename type color value }
+              drawPileCount
+            }
           }
         }
       }
@@ -320,11 +328,15 @@ export async function draw(id: string, player: string) {
         draw(id: $id, player: $player) {
           id
           pending
-          players { id name handCount }
-          currentPlayerIndex
-          direction
-          discardTop { __typename type color value }
-          drawPileCount
+          finished
+          winner { id name score handCount }
+          players { id name score handCount }
+          currentRound {
+            currentPlayerIndex
+            direction
+            discardTop { __typename type color value }
+            drawPileCount
+          }
         }
       }
     `,
@@ -355,11 +367,15 @@ export async function playCardByIndex(
         ) {
           id
           pending
-          players { id name handCount }
-          currentPlayerIndex
-          direction
-          discardTop { __typename type color value }
-          drawPileCount
+          finished
+          winner { id name score handCount }
+          players { id name score handCount }
+          currentRound {
+            currentPlayerIndex
+            direction
+            discardTop { __typename type color value }
+            drawPileCount
+          }
         }
       }
     `,
