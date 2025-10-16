@@ -25,7 +25,8 @@
   "description": "",
   "main": "ServerTest.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx ts-node src/gameserver.ts"
   },
   "keywords": [],
   "author": "",

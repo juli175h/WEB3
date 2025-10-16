@@ -5,7 +5,7 @@ import Game from '@/Views/Game.vue'
 
 const routes = [
     { path: '/', name: 'Lobby', component: Lobby },
-    { path: '/pending', name: 'Pending', component: Pending },
+    { path: '/pending/:id', name: 'Pending', component: Pending },
     { path: '/game/:id', name: 'Game', component: Game },
 ]
 

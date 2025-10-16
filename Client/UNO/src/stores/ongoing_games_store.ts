@@ -1,40 +1,80 @@
-import { defineStore } from 'pinia'
-import { reactive } from 'vue'
-import { Game } from '../../../../Domain/src/model/UnoRound.js'
-import { Player } from '../../../../Domain/src/model/Player.ts'
+import { defineStore } from 'pinia';
+import { reactive, computed } from 'vue';
+import { UnoMatch } from '../../../../Domain/src/model/UnoMatch.ts';
+import { Player } from '../../../../Domain/src/model/Player';
+import type { Card } from '../../../../Domain/src/model/UnoCard.ts';
 
-interface GameEntry {
-  id: number
-  game: Game
-  maxPlayers: number
+interface OngoingUnoGame {
+  id: number;
+  match: UnoMatch;
 }
 
-export const useOngoingGamesStore = defineStore('ongoingGames', () => {
-  const games = reactive<GameEntry[]>([])
+export const useOngoingUnoStore = defineStore('ongoing_uno', () => {
+  const games = reactive<OngoingUnoGame[]>([]);
+  let nextId = 1;
 
-  function createGame(playerName: string, maxPlayers = 2): number {
-    const id = Math.max(...games.map(g => g.id), 0) + 1
-    const game = new Game()
-    game.initialize([new Player(0, playerName)])
-    games.push({ id, game, maxPlayers })
-    return id
+  // --- Get all games ---
+  const allGames = computed(() => games);
+
+  // --- Find game by ID ---
+  function game(id: number) {
+    return games.find(g => g.id === id);
   }
 
-  function joinGame(id: number, playerName: string) {
-    const entry = games.find(g => g.id === id)
-    if (!entry) return
-    if (entry.game.players().length < entry.maxPlayers) {
-      entry.game.players().push(new Player(entry.game.players().length, playerName))
-    }
+  // --- Create a new match ---
+  function createMatch(playerNames: string[]) {
+    const newMatch: OngoingUnoGame = {
+      id: nextId++,
+      match: new UnoMatch(playerNames),
+    };
+    games.push(newMatch);
+    return newMatch;
   }
 
-  function getGame(id: number) {
-    return games.find(g => g.id === id)?.game
+  // --- Play a card ---
+  function playCard(gameId: number, playerId: number, card: Card) {
+    const g = game(gameId);
+    if (!g) return;
+
+    const player = g.match.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    g.match.currentRound.playCard(player, card);
   }
 
-  function getPendingGames() {
-    return games.filter(g => g.game.players().length < g.maxPlayers)
+  // --- Draw a card ---
+  function drawCard(gameId: number, playerId: number) {
+    const g = game(gameId);
+    if (!g) return;
+
+    const player = g.match.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    g.match.currentRound.drawCard(player);
   }
 
-  return { games, createGame, joinGame, getGame, getPendingGames }
-})
+  // --- Advance round (called when round ends) ---
+  function finishRound(gameId: number) {
+    const g = game(gameId);
+    if (!g) return;
+
+    g.match.finishRound();
+  }
+
+  // --- Get current player of a game ---
+  function currentPlayer(gameId: number): Player | undefined {
+    const g = game(gameId);
+    if (!g) return;
+    return g.match.currentRound.currentPlayer;
+  }
+
+  return {
+    allGames,
+    game,
+    createMatch,
+    playCard,
+    drawCard,
+    finishRound,
+    currentPlayer,
+  };
+});

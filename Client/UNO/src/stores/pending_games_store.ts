@@ -1,36 +1,41 @@
-import { computed, reactive, type Reactive } from 'vue'
-import { defineStore } from 'pinia'
-import type { IndexedUno } from '@/model/game'
+import { defineStore } from 'pinia';
+import { reactive, computed } from 'vue';
+import { Player } from '../../../../Domain/src/model/Player'; // your domain Player
 
-export const usePendingGamesStore = defineStore('pending games', () => {
-  const gameList = reactive<IndexedUno[]>([])
-  const games = computed((): Reactive<Readonly<IndexedUno[]>> => gameList)
-  const game = (id: string): IndexedUno | undefined => {
-    return gameList.find(g => g.id === id)
+export interface PendingUnoGame {
+  id: number;             // game ID counter
+  players: Player[];      // list of players in this game
+  maxPlayers: number;     // max number of players for the game
+}
+
+export const usePendingUnoStore = defineStore('pending_uno', () => {
+  const gameList = reactive<PendingUnoGame[]>([]);
+  let nextId = 1; // counter for game IDs
+
+  const games = computed(() => gameList);
+  const game = (id: number) => gameList.find(g => g.id === id);
+
+  function createGame(playerName: string, maxPlayers: number) {
+    const newGame: PendingUnoGame = {
+      id: nextId++,
+      players: [new Player(1, playerName)],
+      maxPlayers
+    };
+    gameList.push(newGame);
+    return newGame;
   }
-  
-  const update = (game: Partial<IndexedUno>) => {
-    const index = gameList.findIndex(g => g.id === game.id)
-    if (index > -1) {
-      gameList[index] = {... gameList[index], ...game}
-      return game
+
+  function joinGame(id: number, playerName: string) {
+    const g = game(id);
+    if (g && g.players.length < g.maxPlayers) {
+      g.players.push(new Player(g.players.length + 1, playerName));
     }
+    return g;
   }
 
-  const upsert = (game: IndexedUno) => {
-    if (gameList.some(g => g.id === game.id)) {
-      update(game)
-    } else {
-      gameList.push(game)
-    }
+  function pending() {
+    return gameList.filter(g => g.players.length < g.maxPlayers);
   }
 
-  const remove = (game: {id: string}) => {
-    const index = gameList.findIndex(g => g.id === game.id)
-    if (index > -1) {
-      gameList.splice(index, 1)
-    }
-  }
-
-  return { games, game, update, upsert, remove }
-})
+  return { games, game, createGame, joinGame, pending };
+});

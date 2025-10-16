@@ -3,13 +3,13 @@ import Page from '@/components/Page.vue'
 import Card from '@/components/Card.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useOngoingGamesStore } from '@/stores/ongoing_games_store'
+import { useOngoingUnoStore } from '../stores/ongoing_games_store';
 import { usePlayerStore } from '@/stores/player_store'
 import { useUnoGame } from '../Composable/useUnoGame'
 
 
 const route = useRoute()
-const store = useOngoingGamesStore()
+const store = useOngoingUnoStore()
 const gameId = Number(route.params.id)
 const game = computed(() => store.getGame(gameId))
 const currentPlayer = computed(() => game.value?.currentPlayer())

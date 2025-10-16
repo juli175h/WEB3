@@ -1,60 +1,60 @@
 <script setup lang="ts">
-  //import * as api from '../model/api'
-  import { ref } from 'vue';
-  import {useRouter} from 'vue-router';
-  import {usePlayerStore} from '@/stores/player_store';
-  import Page from '@/components/Page.vue';
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { usePendingUnoStore } from '../stores/pending_games_store.ts';
 
-  const playerStore = usePlayerStore()
+const pendingStore = usePendingUnoStore();
+const router = useRouter();
 
-  const router = useRouter()
+const playerName = ref('');
+const maxPlayers = ref(2); // default 2
 
-  const number_of_players = ref(3)
+const pendingGames = computed(() => pendingStore.pending());
 
-  const new_game = async (player: string) => {
-    const pending_game = await api.new_game(number_of_players.value, player)
-    setTimeout(() => router.push(`/pending/${pending_game.id}`), 100)
-  }
+// Create a new game
+function createGame() {
+  if (!playerName.value) return alert('Enter your name!');
+  const game = pendingStore.createGame(playerName.value, maxPlayers.value);
+  router.push(`/pending/${game.id}`);
+}
 
-  function testButton() {
-    router.push('/Game/0')
-  }
-//TODO: Put the if above in new_game so it handles the undefined name. Undefined = unable to click or something
-//  if (playerStore.player === undefined)
-//    router.push('/login')
-  function addPlayer() { players.value.push("") }
-  function goToPending() { router.push({ name: 'Pending', query: { players: JSON.stringify(players.value) } }) }
-
+// Join an existing game
+function joinGame(id: number) {
+  if (!playerName.value) return alert('Enter your name!');
+  pendingStore.joinGame(id, playerName.value);
+  router.push(`/pending/${id}`);
+}
 </script>
 
 <template>
   <div>
-  <div style="margin-bottom: 1rem;">
-    <label for="player-name">Your Name:</label>
-    <input id="player-name" v-model="playerName" placeholder="Enter your name" />
-  </div>
+    <h2>Lobby</h2>
 
-  <div style="margin-bottom: 1rem;">
-    <label for="player-count">Number of Players for New Game:</label>
-    <select id="player-count" v-model.number="playerCount">
-      <option v-for="n in 3" :key="n" :value="n + 1">{{ n + 1 }}</option>
-      <!-- Generates options 2, 3, 4 -->
-    </select>
-  </div>
+    <div>
+      <label>Your Name:</label>
+      <input v-model="playerName" placeholder="Enter your name" />
+    </div>
 
-  <h3>Pending Games</h3>
-  <ul>
-    <li v-for="game in pendingGames" :key="game.id">
-      Game #{{ game.id }} ({{ game.players.length }}/{{ game.maxPlayers }} players)
-      <button
-          :disabled="game.players.length >= game.maxPlayers || !canProceed"
-          @click="joinGame(game.id)"
-      >
-        Join
-      </button>
-    </li>
-  </ul>
+    <div>
+      <label>Number of Players (2-4):</label>
+      <select v-model.number="maxPlayers">
+        <option v-for="n in 3" :key="n" :value="n+1">{{ n+1 }}</option>
+      </select>
+    </div>
 
-  <button :disabled="!canProceed" @click="createGame">Create New Game</button>
+    <button @click="createGame" :disabled="!playerName">Create New Game</button>
+
+    <h3>Pending Games</h3>
+    <ul>
+      <li v-for="game in pendingGames" :key="game.id">
+        Game #{{ game.id }} ({{ game.players.length }}/{{ game.maxPlayers }} players)
+        <button
+            @click="joinGame(game.id)"
+            :disabled="game.players.length >= game.maxPlayers || !playerName"
+        >
+          Join
+        </button>
+      </li>
+    </ul>
   </div>
 </template>

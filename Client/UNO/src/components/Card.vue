@@ -51,14 +51,17 @@ const cardImage = computed(() => {
 </script>
 
 <template>
-  <div
-      class="uno-card"
-      :style="{ backgroundImage: `url(${cardImage})` }"
-      @click="clickable && $emit('play', card)"
-  ></div>
+  <div class="card">
+    <img :src="cardImage" alt="UNO card" />
+  </div>
 </template>
 
 <style>
+.card img {
+  width: 80px;
+  height: 120px;
+  margin: 0.2rem;
+}
 .uno-card {
   width: 80px;
   height: 120px;
