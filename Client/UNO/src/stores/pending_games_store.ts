@@ -1,15 +1,15 @@
 import { computed, reactive, type Reactive } from 'vue'
 import { defineStore } from 'pinia'
-import type { IndexedYahtzeeSpecs } from '@/model/game'
+import type { IndexedUno } from '@/model/game'
 
 export const usePendingGamesStore = defineStore('pending games', () => {
-  const gameList = reactive<IndexedYahtzeeSpecs[]>([])
-  const games = computed((): Reactive<Readonly<IndexedYahtzeeSpecs[]>> => gameList)
-  const game = (id: string): IndexedYahtzeeSpecs | undefined => {
+  const gameList = reactive<IndexedUno[]>([])
+  const games = computed((): Reactive<Readonly<IndexedUno[]>> => gameList)
+  const game = (id: string): IndexedUno | undefined => {
     return gameList.find(g => g.id === id)
   }
   
-  const update = (game: Partial<IndexedYahtzeeSpecs>) => {
+  const update = (game: Partial<IndexedUno>) => {
     const index = gameList.findIndex(g => g.id === game.id)
     if (index > -1) {
       gameList[index] = {... gameList[index], ...game}
@@ -17,7 +17,7 @@ export const usePendingGamesStore = defineStore('pending games', () => {
     }
   }
 
-  const upsert = (game: IndexedYahtzeeSpecs) => {
+  const upsert = (game: IndexedUno) => {
     if (gameList.some(g => g.id === game.id)) {
       update(game)
     } else {
