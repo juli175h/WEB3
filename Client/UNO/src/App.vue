@@ -5,9 +5,9 @@ import {RouterView} from 'vue-router'
 
 <template>
   <h1 class="header">UNO!!!!!!!!!</h1>
-  <hr></hr>
-
-  <RouterView/>
+  <div class="page-container">
+    <RouterView />
+  </div>
 </template>
 
 <style>
@@ -25,13 +25,5 @@ import {RouterView} from 'vue-router'
     height: 100%;
     margin: 0 auto;
     background-color:rgb(20, 30, 47);
-  }
-  nav {
-    margin-left: 5%;
-    float: right;
-  }
-  .link {
-    margin: .3rem;
-    display: block;
   }
 </style>

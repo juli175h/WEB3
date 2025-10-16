@@ -22,16 +22,39 @@
 //TODO: Put the if above in new_game so it handles the undefined name. Undefined = unable to click or something
 //  if (playerStore.player === undefined)
 //    router.push('/login')
-
+  function addPlayer() { players.value.push("") }
+  function goToPending() { router.push({ name: 'Pending', query: { players: JSON.stringify(players.value) } }) }
 
 </script>
 
 <template>
-    <button @click="testButton">Test</button>
-  <Page v-if="playerStore.player">
-    <main>
-      Number of players: <input min="2" max="4" type="number" v-model="number_of_players"/>
-      <button @click="new_game(playerStore.player)">New Game</button>
-    </main>
-  </Page>
+  <div>
+  <div style="margin-bottom: 1rem;">
+    <label for="player-name">Your Name:</label>
+    <input id="player-name" v-model="playerName" placeholder="Enter your name" />
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="player-count">Number of Players for New Game:</label>
+    <select id="player-count" v-model.number="playerCount">
+      <option v-for="n in 3" :key="n" :value="n + 1">{{ n + 1 }}</option>
+      <!-- Generates options 2, 3, 4 -->
+    </select>
+  </div>
+
+  <h3>Pending Games</h3>
+  <ul>
+    <li v-for="game in pendingGames" :key="game.id">
+      Game #{{ game.id }} ({{ game.players.length }}/{{ game.maxPlayers }} players)
+      <button
+          :disabled="game.players.length >= game.maxPlayers || !canProceed"
+          @click="joinGame(game.id)"
+      >
+        Join
+      </button>
+    </li>
+  </ul>
+
+  <button :disabled="!canProceed" @click="createGame">Create New Game</button>
+  </div>
 </template>

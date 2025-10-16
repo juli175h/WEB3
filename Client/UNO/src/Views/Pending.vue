@@ -1,69 +1,39 @@
 <script setup lang="ts">
-  import {usePendingGamesStore} from '@/stores/pending_games_store';
-  import {usePlayerStore} from '@/stores/player_store';
-  import {computed, onBeforeMount, ref, watch} from 'vue';
-  import { useRoute, useRouter } from 'vue-router';
-  //import * as api from '../model/api'
-  import {useOngoingGamesStore} from '@/stores/ongoing_games_store';
-  import Page from '@/components/Page.vue';
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useOngoingGamesStore } from '@/stores/ongoing_games_store'
 
-  const route = useRoute()
-  const router = useRouter()
+const router = useRouter()
+const route = useRoute()
+const store = useOngoingGamesStore()
 
-  const pendingGamesStore = usePendingGamesStore()
-  const ongoingGamesStore = useOngoingGamesStore()
-  const playerStore = usePlayerStore()
+const gameId = Number(route.query.gameId)
+const game = store.getGame(gameId)
+const gamePlayers = ref(game ? game.players().map(p => p.name) : [])
 
-  let id = ref(route.params.id.toString())
-
-  onBeforeMount(async () => {
-    let game = pendingGamesStore.game(id.value)
-    if (!game) return game
-    if (!game.creator || !game.number_of_players) {
-      game = await api.pending_game(game?.id)
-      if (game) pendingGamesStore.update(game)
+onMounted(() => {
+  // Automatically add CPU players until game is full
+  const interval = setInterval(() => {
+    if (!game) return
+    const maxPlayers = store.games.find(g => g.id === gameId)?.maxPlayers!
+    if (game.players().length < maxPlayers) {
+      game.players().push({ name: `CPU${game.players().length}`, hand: [] })
+      gamePlayers.value = game.players().map(p => p.name)
+    } else {
+      clearInterval(interval)
+      router.push({ name: 'Game', params: { id: gameId } })
     }
-  })
-
-  const game = computed(() => pendingGamesStore.game(id.value))
-  
-  const canJoin = computed(() => 
-    game.value && playerStore.player 
-    && game.value.players.indexOf(playerStore.player) === -1
-  )
-
-  watch(() => route.params.id, (newId) => id.value = newId.toString())
-  watch(() => pendingGamesStore.game(id.value), g => {
-    if (!g) {
-      if (ongoingGamesStore.game(id.value))
-        router.replace(`/game/${id.value}`)
-      else
-        router.replace('/')
-    }
-  })
-
-  const join = () => {
-    if (game.value &&  playerStore.player && canJoin.value) {
-      api.join(game.value, playerStore.player)
-    }
-  }
-
-  if (playerStore.player === undefined)
-    router.push(`/`)
-  else if (game.value === undefined) {
-    if (ongoingGamesStore.game(id.value))
-      router.replace('/game/' + id.value)
-    else
-      router.replace('/')
-  }
+  }, 1000)
+})
 </script>
 
 <template>
-  <Page>
-    <h1>Game #{{id}}</h1>
-    <div>Created by: {{game?.creator}}</div>
-    <div>Players: {{game?.players.join(', ')}}</div>
-    <div>Available Seats: {{ (game?.number_of_players??2) - (game?.players.length??0)}}</div>
-    <button v-if="canJoin" @click="join">Join</button>
-  </Page>
+  <div>
+    <h2>Waiting for players...</h2>
+    <p>Game #{{ gameId }}</p>
+    <ul>
+      <li v-for="p in gamePlayers" :key="p">{{ p }}</li>
+    </ul>
+    <p>Starting game shortly...</p>
+  </div>
 </template>

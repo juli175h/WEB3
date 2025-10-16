@@ -1,12 +1,76 @@
-<script>
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { Card } from "Domain/src/model/UnoCard.js"
 
+const props = defineProps<{
+  card: Card
+  clickable?: boolean
+}>()
+
+// Compute the CSS class for the correct image
+const cardClass = computed(() => {
+  const { card } = props
+
+  // Wild cards
+  if (card.type === "WILD") return "wildchange"
+  if (card.type === "WILD DRAW") return "wilddraw"
+
+  const color = card.color?.toLowerCase()
+  if (!color) return ""
+
+  // Numbered cards
+  if (card.type === "NUMBERED") return `${color}${card.value}`
+
+  // Action cards
+  switch (card.type) {
+    case "DRAW":
+      return `${color}draw`
+    case "SKIP":
+      return `${color}skip`
+    case "REVERSE":
+      return `${color}reverse`
+    default:
+      return ""
+  }
+})
+
+const cardImage = computed(() => {
+  const { card } = props
+  if (card.type === "WILD") return new URL("@/assets/Cards/uno_card-wildchange.png", import.meta.url).href
+  if (card.type === "WILD DRAW") return new URL("@/assets/Cards/uno_card-wilddraw4.png", import.meta.url).href
+
+  const color = card.color?.toLowerCase()
+  if (!color) return ""
+
+  if (card.type === "NUMBERED") return new URL(`@/assets/Cards/uno_card-${color}${card.value}.png`, import.meta.url).href
+  if (card.type === "DRAW") return new URL(`@/assets/Cards/uno_card-${color}draw2.png`, import.meta.url).href
+  if (card.type === "SKIP") return new URL(`@/assets/Cards/uno_card-${color}skip.png`, import.meta.url).href
+  if (card.type === "REVERSE") return new URL(`@/assets/Cards/uno_card-${color}reverse.png`, import.meta.url).href
+  return ""
+})
 </script>
 
 <template>
-    
+  <div
+      class="uno-card"
+      :style="{ backgroundImage: `url(${cardImage})` }"
+      @click="clickable && $emit('play', card)"
+  ></div>
 </template>
 
 <style>
+.uno-card {
+  width: 80px;
+  height: 120px;
+  margin: 4px;
+  border-radius: 8px;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+.clickable:hover {
+  transform: scale(1.08);
+  cursor: pointer;
+}
 .red0 {
     content: url(@/assets/Cards/uno_card-red0.png)
 }

@@ -1,25 +1,40 @@
-import { computed, reactive, type Reactive } from 'vue'
 import { defineStore } from 'pinia'
-import type { IndexedYahtzee } from '@/model/game'
+import { reactive } from 'vue'
+import { Game } from '../../../../Domain/src/model/Game.ts'
+import { Player } from '../../../../Domain/src/model/Player.ts'
 
-export const useOngoingGamesStore = defineStore('ongoing games', () => {
-  const gameList = reactive<IndexedYahtzee[]>([])
-  const games = computed((): Reactive<Readonly<IndexedYahtzee[]>> => gameList)
-  const game = (id: string): IndexedYahtzee | undefined => gameList.find(g => g.id === id)
-  const update = (game: IndexedYahtzee) => {
-    const index = gameList.findIndex(g => g.id === game.id)
-    if (index > -1) {
-      gameList[index] = game
-      return game
+interface GameEntry {
+  id: number
+  game: Game
+  maxPlayers: number
+}
+
+export const useOngoingGamesStore = defineStore('ongoingGames', () => {
+  const games = reactive<GameEntry[]>([])
+
+  function createGame(playerName: string, maxPlayers = 2): number {
+    const id = Math.max(...games.map(g => g.id), 0) + 1
+    const game = new Game()
+    game.initialize([new Player(0, playerName)])
+    games.push({ id, game, maxPlayers })
+    return id
+  }
+
+  function joinGame(id: number, playerName: string) {
+    const entry = games.find(g => g.id === id)
+    if (!entry) return
+    if (entry.game.players().length < entry.maxPlayers) {
+      entry.game.players().push(new Player(entry.game.players().length, playerName))
     }
   }
-  const upsert = (game: IndexedYahtzee) => {
-    if (gameList.some(g => g.id === game.id)) {
-      update(game)
-    } else {
-      gameList.push(game)
-    }
+
+  function getGame(id: number) {
+    return games.find(g => g.id === id)?.game
   }
 
-  return { games, game, update, upsert }
+  function getPendingGames() {
+    return games.filter(g => g.game.players().length < g.maxPlayers)
+  }
+
+  return { games, createGame, joinGame, getGame, getPendingGames }
 })
