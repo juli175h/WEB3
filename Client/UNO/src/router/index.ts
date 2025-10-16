@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Lobby from '@/views/Lobby.vue'
-import Pending from '@/views/Pending.vue'
-import Game from '@/views/Game.vue'
+import Lobby from '@/Views/Lobby.vue'
+import Pending from '@/Views/Pending.vue'
+import Game from '@/Views/Game.vue'
 
 const routes = [
     { path: '/', name: 'Lobby', component: Lobby },
