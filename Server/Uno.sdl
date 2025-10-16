@@ -1,6 +1,4 @@
 #graphql
-scalar JSON
-
 enum Color {
   RED
   BLUE
@@ -8,11 +6,10 @@ enum Color {
   YELLOW
 }
 
-"Base interface that all Uno cards share"
 interface Card {
   type: String!
   color: Color
-  value: Int
+  value: Int!
 }
 
 type NumberedCard implements Card {
@@ -51,7 +48,6 @@ type WildDrawCard implements Card {
   value: Int!
 }
 
-"Union representing any possible Uno card"
 union AnyCard =
     NumberedCard
   | SkipCard
@@ -60,42 +56,42 @@ union AnyCard =
   | WildCard
   | WildDrawCard
 
-type PublicPlayer {
+type Player {
   id: Int!
   name: String!
+  score: Int!
   handCount: Int!
 }
 
-type PrivatePlayer {
-  id: Int!
-  name: String!
-  hand: [AnyCard!]!
-}
-
-type ActiveGame {
-  id: ID!
-  pending: Boolean!
-  players: [PublicPlayer!]!
+type ActiveRound {
   currentPlayerIndex: Int!
   direction: Int!
   discardTop: AnyCard
   drawPileCount: Int!
-  me(player: String!): PrivatePlayer
+}
+
+type ActiveMatch {
+  id: ID!
+  pending: Boolean!
+  finished: Boolean!
+  winner: Player
+  players: [Player!]!
+  currentRound: ActiveRound!
 }
 
 type PendingGame {
   id: ID!
-  pending: Boolean!
   creator: String!
   number_of_players: Int!
   players: [String!]!
+  pending: Boolean!
 }
 
-union Game = ActiveGame | PendingGame
+union Game = ActiveMatch | PendingGame
 
 type Query {
-  games: [ActiveGame!]!
-  game(id: ID!): ActiveGame
+  games: [ActiveMatch!]!
+  game(id: ID!): ActiveMatch
   pending_games: [PendingGame!]!
   pending_game(id: ID!): PendingGame
 }
@@ -103,16 +99,11 @@ type Query {
 type Mutation {
   new_game(creator: String!, number_of_players: Int!): Game!
   join(id: ID!, player: String!): Game!
-  draw(id: ID!, player: String!): ActiveGame!
-  playCardByIndex(
-    id: ID!
-    player: String!
-    handIndex: Int!
-    chosenColor: Color
-  ): ActiveGame!
+  draw(id: ID!, player: String!): ActiveMatch!
+  playCardByIndex(id: ID!, player: String!, handIndex: Int!, chosenColor: Color): ActiveMatch!
 }
 
 type Subscription {
-  active: ActiveGame!
+  active: ActiveMatch!
   pending: PendingGame!
 }

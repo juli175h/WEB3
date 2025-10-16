@@ -7,7 +7,7 @@ import {
     discardPile,
     drawPile,
     chooseColor
-} from "../../../../Domain/src/model/Game.ts"
+} from "../../../../Domain/src/model/UnoRound.js"
 import { Player } from "../../../../Domain/src/model/Player.ts"
 import type { Card } from "../../../../Domain/src/model/UnoCard.ts"
 

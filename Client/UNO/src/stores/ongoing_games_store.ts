@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
-import { Game } from '../../../../Domain/src/model/Game.ts'
+import { Game } from '../../../../Domain/src/model/UnoRound.js'
 import { Player } from '../../../../Domain/src/model/Player.ts'
 
 interface GameEntry {
