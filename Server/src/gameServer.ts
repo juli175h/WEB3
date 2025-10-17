@@ -16,6 +16,7 @@ import { create_api } from "./api";
 import { create_resolvers } from "./resolvers";
 
 async function start() {
+  // ✅ Create one PubSub instance and share it everywhere
   const pubsub = new PubSub();
   const store = new MemoryStore();
   const serverModel = new ServerModel(store);
@@ -26,17 +27,30 @@ async function start() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
   const app = express();
-
-  // ✅ Middleware order matters
-  app.use(cors({ origin: /:\/\/localhost:/, methods: ["GET", "POST", "OPTIONS"] }));
-  app.use(express.json()); // use express built-in JSON parser
+  app.use(cors({ origin: /:\/\/localhost:/ }));
+  app.use(express.json());
 
   const httpServer = http.createServer(app);
 
-  // WebSocket server
-  const wsServer = new WebSocketServer({ server: httpServer });
-  const serverCleanup = useServer({ schema }, wsServer);
+  // ✅ WebSocket server for subscriptions
+  const wsServer = new WebSocketServer({ server: httpServer, path: "/graphql" });
 
+  // ✅ Pass pubsub & api into the WS context
+  const serverCleanup = useServer(
+  {
+    schema,
+    context: () => ({ pubsub, api }),
+    onConnect: () => {
+      console.log("🔌 WebSocket client connected");
+    },
+    onSubscribe: (_ctx, msg: any) => {
+      console.log("🧩 Subscription started:", msg.payload?.query);
+    },
+  },
+  wsServer
+);
+
+  // ✅ Apollo server for queries/mutations
   const apollo = new ApolloServer({
     schema,
     plugins: [
@@ -52,17 +66,20 @@ async function start() {
   });
 
   await apollo.start();
-
-  // mount Apollo middleware after JSON & CORS
-  app.use("/graphql", expressMiddleware(apollo));
+  app.use(
+    "/graphql",
+    expressMiddleware(apollo, {
+      context: async () => ({ pubsub, api }),
+    })
+  );
 
   const PORT = 4000;
   httpServer.listen(PORT, () => {
-    console.log(`Uno GraphQL server running at http://localhost:${PORT}/graphql`);
+    console.log(`🚀 Uno GraphQL server running at http://localhost:${PORT}/graphql`);
   });
 }
 
-start().catch(err => {
+start().catch((err) => {
   console.error(err);
   process.exit(1);
 });

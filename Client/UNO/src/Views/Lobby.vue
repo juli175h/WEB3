@@ -21,11 +21,11 @@ async function createGame() {
   if (!playerName.value) return alert('Enter your name!');
   const game = await pendingStore.createGame(playerName.value, maxPlayers.value);
 
-  // 🔧 Fix: handle both pending and active cases
+  // ✅ Handle both pending and active results
   if (game.pending) {
     router.push(`/pending/${game.id}`);
   } else {
-    router.push(`/game/${game.id}`); // or whatever your active game route is
+    router.push(`/game/${game.id}`);
   }
 }
 
@@ -34,7 +34,7 @@ async function joinGame(id: string) {
   if (!playerName.value) return alert('Enter your name!');
   const joined = await pendingStore.joinGame(id, playerName.value);
 
-  // 🔧 Same logic: go to pending if still waiting, or game if it started
+  // ✅ Go to pending if still waiting, or directly to game if lobby is full
   if (joined.pending) {
     router.push(`/pending/${joined.id}`);
   } else {
@@ -43,19 +43,21 @@ async function joinGame(id: string) {
 }
 </script>
 
-
 <template>
   <div class="lobby">
     <h2>UNO Lobby</h2>
 
     <section class="setup">
-      <label>Your Name:</label>
-      <input v-model="playerName" placeholder="Enter your name" />
-
-      <label>Number of Players (2–4):</label>
-      <select v-model.number="maxPlayers">
-        <option v-for="n in 3" :key="n" :value="n + 1">{{ n + 1 }}</option>
-      </select>
+      <div>
+        <label>Your Name:</label>
+        <input v-model="playerName" placeholder="Enter your name" />
+      </div>
+      <div>
+        <label>Number of Players (2–4):</label>
+        <select v-model.number="maxPlayers">
+          <option v-for="n in 3" :key="n" :value="n + 1">{{ n + 1 }}</option>
+        </select>
+      </div>
 
       <button @click="createGame" :disabled="!playerName">Create New Game</button>
     </section>

@@ -43,17 +43,14 @@ export class ServerModel {
     return this.join(pg.id, creator);
   }
 
-  async join(id: string, player: string) {
+ /** Join a pending game, or start a match if it becomes full */
+async join(id: string, player: string) {
   const pg = await this.store.pending_game(id);
   if (!pg) throw new Error("No pending game found");
 
-  // Add player if not already there
-  if (!pg.players.includes(player)) {
-    pg.players = [...pg.players, player]; // create new array for reactivity
-    await this.store.update_pending(pg);
-  }
+  if (!pg.players.includes(player)) pg.players.push(player);
 
-  // ✅ Start the match when the lobby is full
+  // If the lobby becomes full, start the match
   if (pg.players.length >= pg.number_of_players) {
     console.log(`🎯 Starting match for lobby ${pg.id} with players:`, pg.players);
 
@@ -64,16 +61,20 @@ export class ServerModel {
       pending: false as const,
     });
 
+    // ✅ Clean up the pending entry before storing the match
     await this.store.delete_pending(pg.id);
     await this.store.add(indexed);
 
-    console.log("🚀 Match created, broadcasting ACTIVE_UPDATED:", pg.id);
-    return indexed;
+    console.log(`🚀 Match created, returning ACTIVE game ${pg.id}`);
+    return indexed; // ✅ Return the active match
   }
 
-  console.log("🔁 Lobby updated (still pending):", pg.id);
-  return pg;
+  // Otherwise, just update the pending lobby
+  await this.store.update_pending(pg);
+  console.log(`🔁 Lobby updated (still pending): ${pg.id}`);
+  return pg; // still pending
 }
+
 
 
   /** Return all matches */

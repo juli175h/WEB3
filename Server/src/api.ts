@@ -15,15 +15,29 @@ export interface API {
 
 export function create_api(pubsub: PubSub, server: ServerModel): API {
   async function broadcast(game: IndexedUnoMatch | PendingGame) {
-  if ((game as any).pending) {
-    console.log("🔁 Broadcasting pending update:", game.id);
-    pubsub.publish("PENDING_UPDATED", { pending: game });
-  } else {
-    console.log("🚀 Broadcasting ACTIVE_UPDATED:", game.id);
-    pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(game as IndexedUnoMatch) });
-    pubsub.publish("PENDING_UPDATED", { pending: null }); // notify lobbies
+    if ((game as any).pending) {
+      console.log("🔁 Broadcasting pending update:", game.id);
+      // ✅ publish wrapped payload as { pending: game }
+      console.log("📡 Publishing to PENDING_UPDATED:", JSON.stringify({ pending: game }, null, 2));
+      pubsub.publish("PENDING_UPDATED", { pending: game });
+    } else {
+      console.log("🚀 Broadcasting ACTIVE_UPDATED and PENDING_UPDATED:", game.id);
+      const active = toGraphQLMatch(game as IndexedUnoMatch);
+      console.log("📡 Publishing to ACTIVE_UPDATED:", JSON.stringify({ active }, null, 2));
+      pubsub.publish("ACTIVE_UPDATED", { active });
+
+      // also notify pending subscribers that the lobby is over
+      const ended = {
+        id: game.id,
+        creator: active.players[0]?.name ?? "system",
+        number_of_players: active.players.length,
+        players: active.players.map((p) => p.name),
+        pending: false,
+      };
+      console.log("📡 Publishing to PENDING_UPDATED (ended):", JSON.stringify({ pending: ended }, null, 2));
+      pubsub.publish("PENDING_UPDATED", { pending: ended });
+    }
   }
-}
 
   return {
     async new_game(creator, number) {
@@ -32,16 +46,25 @@ export function create_api(pubsub: PubSub, server: ServerModel): API {
       return g;
     },
 
-    // 👇 revised join()
     async join(id, player) {
       const g = await server.join(id, player);
 
-      // If the game is now active (no longer pending)
       if (!("pending" in g && g.pending)) {
-        // Notify pending subscribers so they can refresh
-        pubsub.publish("PENDING_UPDATED", { pending: null });
-        // Notify active subscribers so all clients in this lobby transition
-        pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(g as IndexedUnoMatch) });
+        const active = toGraphQLMatch(g as IndexedUnoMatch);
+
+        console.log("🔔 Publishing pending=false:", g.id);
+        console.log("📡 Publishing to ACTIVE_UPDATED:", JSON.stringify({ active }, null, 2));
+        pubsub.publish("ACTIVE_UPDATED", { active });
+
+        const ended = {
+          id: g.id,
+          creator: active.players[0]?.name ?? "system",
+          number_of_players: active.players.length,
+          players: active.players.map((p) => p.name),
+          pending: false,
+        };
+        console.log("📡 Publishing to PENDING_UPDATED (ended):", JSON.stringify({ pending: ended }, null, 2));
+        pubsub.publish("PENDING_UPDATED", { pending: ended });
       } else {
         await broadcast(g);
       }
@@ -71,8 +94,6 @@ export function create_api(pubsub: PubSub, server: ServerModel): API {
 // helper for broadcast and resolver output
 export function toGraphQLMatch(match: IndexedUnoMatch) {
   const round = match.currentRound;
-
-  // Build a safe round snapshot (tolerant to early initialization)
   const safeRound = round
     ? {
         currentPlayerIndex: round.currentPlayerIndex ?? 0,
@@ -100,6 +121,6 @@ export function toGraphQLMatch(match: IndexedUnoMatch) {
       score: p.score,
       handCount: p.hand?.length ?? 0,
     })),
-    currentRound: safeRound, // can be null briefly; client handles it
+    currentRound: safeRound,
   };
 }

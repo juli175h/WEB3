@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Page from '../components/Page.vue'
+//import Page from '../'
 import Card from '../components/Card.vue'
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'

@@ -68,16 +68,17 @@ async function mutate<T>(mutation: DocumentNode, variables?: any): Promise<T> {
 /* ---------------- Subscriptions ---------------- */
 
 interface ActiveSubscriptionResult {
-  active: any;
+  active?: any;
 }
 
 interface PendingSubscriptionResult {
-  pending: PendingUno;
+  pending?: PendingUno;
 }
 
+/** Listen for active game updates */
 export async function onActive(subscriber: (g: IndexedUno) => any) {
   const q = gql`
-    subscription {
+    subscription ActiveSub {
       active {
         id
         pending
@@ -92,25 +93,31 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
 
   const obs = apollo.subscribe<ActiveSubscriptionResult>({ query: q });
   obs.subscribe({
-    next({ data }) {
-      console.log("🔥 ACTIVE update received:", data);
-      if (data?.active) subscriber(from_graphql_game(data.active));
+    next(payload) {
+      console.log("🔥 Raw ACTIVE payload:", JSON.stringify(payload, null, 2));
+      const data = payload.data;
+      if (data?.active) {
+        console.log("🔥 ACTIVE update received:", data.active);
+        subscriber(from_graphql_game(data.active));
+      } else {
+        console.warn("⚠️ ACTIVE subscription had no data field");
+      }
     },
     error(err) {
-      console.error("Active subscription error:", err);
+      console.error("❌ Active subscription error:", err);
     },
   });
 }
 
-
+/** Listen for pending game updates */
 export async function onPending(subscriber: (g: PendingUno) => any) {
   const q = gql`
-    subscription {
+    subscription PendingSub {
       pending {
         id
         pending
         creator
-        pendingPlayers: players
+        players
         number_of_players
       }
     }
@@ -118,15 +125,28 @@ export async function onPending(subscriber: (g: PendingUno) => any) {
 
   const obs = apollo.subscribe<PendingSubscriptionResult>({ query: q });
   obs.subscribe({
-    next({ data }) {
-      if (data?.pending)
-        subscriber({ ...data.pending, pending: true } as PendingUno);
+    next(payload) {
+      console.log("📩 Raw PENDING payload:", JSON.stringify(payload, null, 2));
+      const data = payload.data;
+
+      // Defensive checks
+      if (data && typeof data === "object") {
+        if (data.pending) {
+          console.log("✅ Parsed pending update:", data.pending);
+          subscriber(data.pending as PendingUno);
+        } else {
+          console.warn("⚠️ Received pending subscription with no 'pending' field:", data);
+        }
+      } else {
+        console.warn("⚠️ Pending subscription emitted non-object payload:", payload);
+      }
     },
     error(err) {
-      console.error("Pending subscription error:", err);
+      console.error("❌ Pending subscription error:", err);
     },
   });
 }
+
 
 /* ---------------- Queries ---------------- */
 
@@ -217,7 +237,7 @@ export async function pending_games(): Promise<PendingUno[]> {
           id
           pending
           creator
-          pendingPlayers: players
+          players
           number_of_players
         }
       }
@@ -234,7 +254,7 @@ export async function pending_game(id: string): Promise<PendingUno | undefined> 
           id
           pending
           creator
-          pendingPlayers: players
+          players
           number_of_players
         }
       }
@@ -276,7 +296,7 @@ export async function new_game(
             pending
             creator
             number_of_players
-            pendingPlayers: players
+            players
           }
           ... on ActiveMatch {
             id
@@ -320,7 +340,7 @@ export async function join(game: PendingUno, player: string) {
             pending
             creator
             number_of_players
-            pendingPlayers: players
+            players
           }
           ... on ActiveMatch {
             id

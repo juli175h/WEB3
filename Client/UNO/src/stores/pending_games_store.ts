@@ -7,14 +7,14 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
   const gameList = ref<PendingUno[]>([]);
   const loading = ref(false);
   const error = ref(false);
-  const onRemovedCallbacks: ((id: string) => void)[] = []; // ✅ added
 
+  /* ---------------- Load pending games ---------------- */
   async function loadPendingGames() {
     loading.value = true;
     error.value = false;
     try {
       const res = await pending_games();
-      gameList.value = res.map(g => ({ ...g }));
+      gameList.value = res.map((g) => ({ ...g }));
     } catch (err) {
       console.error('❌ Failed to load pending games:', err);
       error.value = true;
@@ -23,21 +23,38 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
     }
   }
 
+  /* ---------------- Subscriptions ---------------- */
   function subscribeToUpdates() {
     try {
       onPending((updated) => {
-        if (!updated) return; // safety for null events
+        if (!updated) return;
 
+        console.log('📩 Pending store received update:', updated);
+
+        // ✅ If the server signals pending=false, remove the lobby
+        if ((updated as any).pending === false) {
+          const id = (updated as any).id as string;
+          console.log('🧭 Removing lobby because game started:', id);
+          const idx = gameList.value.findIndex((g) => g.id === id);
+          if (idx !== -1) gameList.value.splice(idx, 1);
+          return;
+        }
+
+        // Normal pending update: merge or insert
         const fresh = structuredClone(updated);
         const idx = gameList.value.findIndex((g) => g.id === fresh.id);
-
-        if (fresh.pending) {
-          if (idx !== -1) gameList.value[idx] = fresh;
-          else gameList.value.push(fresh);
+        if (idx !== -1) {
+          const prev = gameList.value[idx];
+          gameList.value[idx] = {
+            ...prev,
+            ...fresh,
+            players: fresh.players ?? prev.players ?? [],
+          };
         } else {
-          // ✅ pending -> active, remove from list
-          if (idx !== -1) gameList.value.splice(idx, 1);
-          onRemovedCallbacks.forEach(cb => cb(fresh.id));
+          gameList.value.push({
+            ...fresh,
+            players: fresh.players ?? [],
+          });
         }
       });
     } catch (err) {
@@ -46,11 +63,12 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
     }
   }
 
+  /* ---------------- Mutations ---------------- */
   async function createGame(creator: string, numberOfPlayers: number) {
     const created = await new_game(numberOfPlayers, creator);
     const fresh = structuredClone(created);
     if (fresh.pending) {
-      gameList.value.push(fresh);
+      gameList.value.push({ ...fresh, players: fresh.players ?? [] });
     }
     return fresh;
   }
@@ -61,15 +79,20 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
     const joined = await join(found, player);
     const fresh = structuredClone(joined);
     const idx = gameList.value.findIndex((g) => g.id === fresh.id);
-    if (idx !== -1) gameList.value[idx] = fresh;
-    else gameList.value.push(fresh);
+    if (idx !== -1) {
+      const prev = gameList.value[idx];
+      gameList.value[idx] = {
+        ...prev,
+        ...fresh,
+        players: fresh.players ?? prev.players ?? [],
+      };
+    } else {
+      gameList.value.push({ ...fresh, players: fresh.players ?? [] });
+    }
     return fresh;
   }
 
-  function onPendingRemoved(cb: (id: string) => void) {
-    onRemovedCallbacks.push(cb);
-  }
-
+  /* ---------------- Getters ---------------- */
   function pending() {
     return gameList.value;
   }
@@ -83,6 +106,5 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
     createGame,
     joinGame,
     pending,
-    onPendingRemoved, // ✅ expose helper
   };
 });
