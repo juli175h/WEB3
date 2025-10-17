@@ -39,34 +39,42 @@ export class ServerModel {
       players: [],
       pending: true,
     });
+
     return this.join(pg.id, creator);
   }
 
-  /** Join a pending game, or start a match if it becomes full */
   async join(id: string, player: string) {
-    const pg = await this.store.pending_game(id);
-    if (!pg) throw new Error("No pending game found");
+  const pg = await this.store.pending_game(id);
+  if (!pg) throw new Error("No pending game found");
 
-    if (!pg.players.includes(player)) pg.players.push(player);
-
-    // start the actual match when full
-    if (pg.players.length === pg.number_of_players) {
-      const match = new UnoMatch(pg.players);
-
-      // ✅ Keep the class instance intact — just add properties
-      const indexed = Object.assign(match, {
-        id: pg.id,
-        pending: false as const,
-      }) as IndexedUnoMatch;
-
-      await this.store.delete_pending(pg.id);
-      await this.store.add(indexed);
-      return indexed;
-    }
-
+  // Add player if not already there
+  if (!pg.players.includes(player)) {
+    pg.players = [...pg.players, player]; // create new array for reactivity
     await this.store.update_pending(pg);
-    return pg;
   }
+
+  // ✅ Start the match when the lobby is full
+  if (pg.players.length >= pg.number_of_players) {
+    console.log(`🎯 Starting match for lobby ${pg.id} with players:`, pg.players);
+
+    const match = new UnoMatch(pg.players);
+
+    const indexed: IndexedUnoMatch = Object.assign(match, {
+      id: pg.id,
+      pending: false as const,
+    });
+
+    await this.store.delete_pending(pg.id);
+    await this.store.add(indexed);
+
+    console.log("🚀 Match created, broadcasting ACTIVE_UPDATED:", pg.id);
+    return indexed;
+  }
+
+  console.log("🔁 Lobby updated (still pending):", pg.id);
+  return pg;
+}
+
 
   /** Return all matches */
   async games() {
@@ -85,7 +93,8 @@ export class ServerModel {
 
   /** Return one pending lobby */
   async pending_game(id: string) {
-    return this.store.pending_game(id);
+    const all = await this.store.pending_games();
+    return all.find(g => String(g.id) === String(id));
   }
 
   /** Player draws one card */

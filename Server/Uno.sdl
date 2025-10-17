@@ -14,25 +14,25 @@ interface Card {
 
 type NumberedCard implements Card {
   type: String!
-  color: Color!
+  color: Color
   value: Int!
 }
 
 type SkipCard implements Card {
   type: String!
-  color: Color!
+  color: Color
   value: Int!
 }
 
 type ReverseCard implements Card {
   type: String!
-  color: Color!
+  color: Color
   value: Int!
 }
 
 type DrawTwoCard implements Card {
   type: String!
-  color: Color!
+  color: Color
   value: Int!
 }
 
@@ -60,14 +60,14 @@ type Player {
   id: Int!
   name: String!
   score: Int!
-  handCount: Int!
+  handCount: Int
 }
 
 type ActiveRound {
-  currentPlayerIndex: Int!
-  direction: Int!
+  currentPlayerIndex: Int
+  direction: Int
   discardTop: AnyCard
-  drawPileCount: Int!
+  drawPileCount: Int
 }
 
 type ActiveMatch {
@@ -76,7 +76,7 @@ type ActiveMatch {
   finished: Boolean!
   winner: Player
   players: [Player!]!
-  currentRound: ActiveRound!
+  currentRound: ActiveRound
 }
 
 type PendingGame {

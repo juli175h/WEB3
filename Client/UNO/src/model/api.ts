@@ -81,15 +81,11 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
       active {
         id
         pending
-        finished
-        winner { id name score handCount }
-        players { id name score handCount }
-        currentRound {
-          currentPlayerIndex
-          direction
-          discardTop { __typename type color value }
-          drawPileCount
-        }
+        players { id name handCount }
+        currentPlayerIndex
+        direction
+        discardTop { __typename type color value }
+        drawPileCount
       }
     }
   `;
@@ -97,6 +93,7 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
   const obs = apollo.subscribe<ActiveSubscriptionResult>({ query: q });
   obs.subscribe({
     next({ data }) {
+      console.log("🔥 ACTIVE update received:", data);
       if (data?.active) subscriber(from_graphql_game(data.active));
     },
     error(err) {
@@ -105,6 +102,7 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
   });
 }
 
+
 export async function onPending(subscriber: (g: PendingUno) => any) {
   const q = gql`
     subscription {
@@ -112,7 +110,7 @@ export async function onPending(subscriber: (g: PendingUno) => any) {
         id
         pending
         creator
-        players
+        pendingPlayers: players
         number_of_players
       }
     }
@@ -157,11 +155,19 @@ export async function games(): Promise<IndexedUno[]> {
           pending
           finished
           winner { id name score handCount }
-          players { id name score handCount }
+          activePlayers: players { id name score handCount }
           currentRound {
             currentPlayerIndex
             direction
-            discardTop { __typename type color value }
+            discardTop {
+              __typename
+              ... on NumberedCard { numberedColor: color value }
+              ... on ReverseCard { reverseColor: color }
+              ... on SkipCard { skipColor: color }
+              ... on DrawTwoCard { drawColor: color }
+              ... on WildCard { wildColor: color }
+              ... on WildDrawCard { wildDrawColor: color }
+            }
             drawPileCount
           }
         }
@@ -180,11 +186,19 @@ export async function game(id: string): Promise<IndexedUno | undefined> {
           pending
           finished
           winner { id name score handCount }
-          players { id name score handCount }
+          activePlayers: players { id name score handCount }
           currentRound {
             currentPlayerIndex
             direction
-            discardTop { __typename type color value }
+            discardTop {
+              __typename
+              ... on NumberedCard { numberedColor: color value }
+              ... on ReverseCard { reverseColor: color }
+              ... on SkipCard { skipColor: color }
+              ... on DrawTwoCard { drawColor: color }
+              ... on WildCard { wildColor: color }
+              ... on WildDrawCard { wildDrawColor: color }
+            }
             drawPileCount
           }
         }
@@ -203,7 +217,7 @@ export async function pending_games(): Promise<PendingUno[]> {
           id
           pending
           creator
-          players
+          pendingPlayers: players
           number_of_players
         }
       }
@@ -220,7 +234,7 @@ export async function pending_game(id: string): Promise<PendingUno | undefined> 
           id
           pending
           creator
-          players
+          pendingPlayers: players
           number_of_players
         }
       }
@@ -248,6 +262,7 @@ interface PlayResult {
   playCardByIndex: any;
 }
 
+/* --- New Game --- */
 export async function new_game(
   number_of_players: number,
   player: string
@@ -261,18 +276,26 @@ export async function new_game(
             pending
             creator
             number_of_players
-            players
+            pendingPlayers: players
           }
-          ... on ActiveGame {
+          ... on ActiveMatch {
             id
             pending
             finished
             winner { id name score handCount }
-            players { id name score handCount }
+            activePlayers: players { id name score handCount }
             currentRound {
               currentPlayerIndex
               direction
-              discardTop { __typename type color value }
+              discardTop {
+                __typename
+                ... on NumberedCard { numberedColor: color value }
+                ... on ReverseCard { reverseColor: color }
+                ... on SkipCard { skipColor: color }
+                ... on DrawTwoCard { drawColor: color }
+                ... on WildCard { wildColor: color }
+                ... on WildDrawCard { wildDrawColor: color }
+              }
               drawPileCount
             }
           }
@@ -286,6 +309,7 @@ export async function new_game(
   return g.pending ? (g as PendingUno) : from_graphql_game(g);
 }
 
+/* --- Join Game --- */
 export async function join(game: PendingUno, player: string) {
   const res = await mutate<JoinResult>(
     gql`
@@ -296,18 +320,26 @@ export async function join(game: PendingUno, player: string) {
             pending
             creator
             number_of_players
-            players
+            pendingPlayers: players
           }
-          ... on ActiveGame {
+          ... on ActiveMatch {
             id
             pending
             finished
             winner { id name score handCount }
-            players { id name score handCount }
+            activePlayers: players { id name score handCount }
             currentRound {
               currentPlayerIndex
               direction
-              discardTop { __typename type color value }
+              discardTop {
+                __typename
+                ... on NumberedCard { numberedColor: color value }
+                ... on ReverseCard { reverseColor: color }
+                ... on SkipCard { skipColor: color }
+                ... on DrawTwoCard { drawColor: color }
+                ... on WildCard { wildColor: color }
+                ... on WildDrawCard { wildDrawColor: color }
+              }
               drawPileCount
             }
           }
@@ -321,6 +353,7 @@ export async function join(game: PendingUno, player: string) {
   return g.pending ? (g as PendingUno) : from_graphql_game(g);
 }
 
+/* --- Draw --- */
 export async function draw(id: string, player: string) {
   const res = await mutate<DrawResult>(
     gql`
@@ -330,11 +363,19 @@ export async function draw(id: string, player: string) {
           pending
           finished
           winner { id name score handCount }
-          players { id name score handCount }
+          activePlayers: players { id name score handCount }
           currentRound {
             currentPlayerIndex
             direction
-            discardTop { __typename type color value }
+            discardTop {
+              __typename
+              ... on NumberedCard { numberedColor: color value }
+              ... on ReverseCard { reverseColor: color }
+              ... on SkipCard { skipColor: color }
+              ... on DrawTwoCard { drawColor: color }
+              ... on WildCard { wildColor: color }
+              ... on WildDrawCard { wildDrawColor: color }
+            }
             drawPileCount
           }
         }
@@ -345,6 +386,7 @@ export async function draw(id: string, player: string) {
   return from_graphql_game(res.draw);
 }
 
+/* --- Play Card --- */
 export async function playCardByIndex(
   id: string,
   player: string,
@@ -369,11 +411,19 @@ export async function playCardByIndex(
           pending
           finished
           winner { id name score handCount }
-          players { id name score handCount }
+          activePlayers: players { id name score handCount }
           currentRound {
             currentPlayerIndex
             direction
-            discardTop { __typename type color value }
+            discardTop {
+              __typename
+              ... on NumberedCard { numberedColor: color value }
+              ... on ReverseCard { reverseColor: color }
+              ... on SkipCard { skipColor: color }
+              ... on DrawTwoCard { drawColor: color }
+              ... on WildCard { wildColor: color }
+              ... on WildDrawCard { wildDrawColor: color }
+            }
             drawPileCount
           }
         }

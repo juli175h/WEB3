@@ -21,7 +21,7 @@ async function start() {
   const serverModel = new ServerModel(store);
   const api = create_api(pubsub, serverModel);
 
-  const typeDefs = `#graphql\n${await readFile("./uno.sdl", "utf8")}`;
+  const typeDefs = `#graphql\n${await readFile("./Uno.sdl", "utf8")}`;
   const resolvers = create_resolvers(pubsub, api);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
