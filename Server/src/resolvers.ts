@@ -1,32 +1,63 @@
 import { PubSub } from "graphql-subscriptions";
 import { API, toGraphQLMatch } from "./api";
+import { IndexedUnoMatch, PendingGame } from "./serverModel";
+import {Color} from "../../Domain/src/model/UnoCard";
 
-export function create_resolvers(pubsub: PubSub, api: API) {
+/** Convert a game to GraphQL type */
+function mapToGraphQL(game: IndexedUnoMatch | PendingGame) {
+  if ("pending" in game && game.pending) return game; // lobby
+  return toGraphQLMatch(game as IndexedUnoMatch);      // active
+}
+
+export const create_resolvers = (pubsub: PubSub, api: API) => {
   return {
     Query: {
-      games: async () => (await api.games()).map(toGraphQLMatch),
-      game: async (_: any, { id }: { id: string }) => {
+      async games() {
+        const res = await api.games();
+        return res.map(toGraphQLMatch);
+      },
+      async game(_: any, { id }: { id: string }) {
         const g = await api.game(id);
         return g ? toGraphQLMatch(g) : null;
       },
-      pending_games: () => api.pending_games(),
-      pending_game: (_: any, { id }: { id: string }) => api.pending_game(id),
+      async pending_games() {
+        return api.pending_games();
+      },
+      async pending_game(_: any, { id }: { id: string }) {
+        return api.pending_game(id);
+      },
     },
 
     Mutation: {
-      new_game: (_: any, args: { creator: string; number_of_players: number }) =>
-        api.new_game(args.creator, args.number_of_players),
+      async new_game(_: any, { creator, number_of_players }: { creator: string; number_of_players: number }) {
+        const game = await api.new_game(creator, number_of_players);
+        pubsub.publish("PENDING_UPDATED", { pending: game });
+        return game;
+      },
 
-      join: (_: any, args: { id: string; player: string }) =>
-        api.join(args.id, args.player),
+      async join(_: any, { id, player }: { id: string; player: string }) {
+        const game = await api.join(id, player);
+        pubsub.publish(game.pending ? "PENDING_UPDATED" : "ACTIVE_UPDATED", {
+          pending: game.pending ? game : undefined,
+          active: !game.pending ? toGraphQLMatch(game as IndexedUnoMatch) : undefined,
+        });
+        return game;
+      },
 
-      draw: (_: any, args: { id: string; player: string }) =>
-        api.draw(args.id, args.player),
+      async draw(_: any, { id, player }: { id: string; player: string }) {
+        const g = await api.draw(id, player);
+        pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(g) });
+        return g;
+      },
 
-      playCardByIndex: (
-        _: any,
-        args: { id: string; player: string; handIndex: number; chosenColor?: any }
-      ) => api.play(args.id, args.player, args.handIndex, args.chosenColor),
+      async playCardByIndex(
+          _: any,
+          { id, player, handIndex, chosenColor }: { id: string; player: string; handIndex: number; chosenColor?: Color }
+      ) {
+        const g = await api.play(id, player, handIndex, chosenColor);
+        pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(g) });
+        return g;
+      },
     },
 
     Game: {
@@ -35,13 +66,13 @@ export function create_resolvers(pubsub: PubSub, api: API) {
       },
     },
 
-   Subscription: {
-  active: {
-    subscribe: () => (pubsub as any).asyncIterator(["ACTIVE_UPDATED"]),
-  },
-  pending: {
-    subscribe: () => (pubsub as any).asyncIterator(["PENDING_UPDATED"]),
-  },
-},
+    Subscription: {
+      active: {
+        subscribe: () => pubsub.asyncIterableIterator(["ACTIVE_UPDATED"]),
+      },
+      pending: {
+        subscribe: () => pubsub.asyncIterableIterator(["PENDING_UPDATED"]),
+      },
+    },
   };
-}
+};

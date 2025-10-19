@@ -44,36 +44,37 @@ export class ServerModel {
   }
 
  /** Join a pending game, or start a match if it becomes full */
-async join(id: string, player: string) {
-  const pg = await this.store.pending_game(id);
-  if (!pg) throw new Error("No pending game found");
+ async join(id: string, player: string): Promise<IndexedUnoMatch | PendingGame> {
+   const pg = await this.store.pending_game(id);
+   if (!pg) throw new Error("No pending game found");
 
-  if (!pg.players.includes(player)) pg.players.push(player);
+   // Add player if not already in the lobby
+   if (!pg.players.includes(player)) pg.players.push(player);
 
-  // If the lobby becomes full, start the match
-  if (pg.players.length >= pg.number_of_players) {
-    console.log(`🎯 Starting match for lobby ${pg.id} with players:`, pg.players);
+   // If lobby is full → start active match
+   if (pg.players.length >= pg.number_of_players) {
+     console.log(`🎯 Starting match for lobby ${pg.id} with players:`, pg.players);
 
-    const match = new UnoMatch(pg.players);
+     const match = new UnoMatch(pg.players);
 
-    const indexed: IndexedUnoMatch = Object.assign(match, {
-      id: pg.id,
-      pending: false as const,
-    });
+     const indexed: IndexedUnoMatch = Object.assign(match, {
+       id: pg.id,
+       pending: false as const,
+     });
 
-    // ✅ Clean up the pending entry before storing the match
-    await this.store.delete_pending(pg.id);
-    await this.store.add(indexed);
+     await this.store.delete_pending(pg.id); // remove lobby
+     await this.store.add(indexed);          // add active match
 
-    console.log(`🚀 Match created, returning ACTIVE game ${pg.id}`);
-    return indexed; // ✅ Return the active match
-  }
+     console.log(`🚀 Match created, returning ACTIVE game ${pg.id}`);
+     return indexed; // ✅ only IndexedUnoMatch here
+   }
 
-  // Otherwise, just update the pending lobby
-  await this.store.update_pending(pg);
-  console.log(`🔁 Lobby updated (still pending): ${pg.id}`);
-  return pg; // still pending
-}
+   // Lobby still pending → just update
+   await this.store.update_pending(pg);
+   console.log(`🔁 Lobby updated (still pending): ${pg.id}`);
+   return pg; // ✅ returns PendingGame
+ }
+
 
 
 

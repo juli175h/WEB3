@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "dependencies": {
+    "@graphql-tools/schema": "^10.0.25",
+    "graphql-subscriptions": "^3.0.0",
+    "graphql-ws": "^6.0.6",
+    "ws": "^8.18.3"
+  }
+}
