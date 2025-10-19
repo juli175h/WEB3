@@ -11,8 +11,12 @@ const maxPlayers = ref(2);
 
 onMounted(async () => {
   await pendingStore.loadPendingGames();
-  pendingStore.subscribeToUpdates();
+  pendingStore.subscribeToUpdates((id) => {
+    // ✅ Redirect to the active game
+    router.push(`/game/${id}`);
+  });
 });
+
 
 const pendingGames = computed(() => pendingStore.pending());
 

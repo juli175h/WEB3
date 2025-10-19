@@ -2,12 +2,10 @@
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePendingUnoStore } from '../stores/pending_games_store';
-import { onActive, onPending } from '../model/api';
 
 const pendingStore = usePendingUnoStore();
 const route = useRoute();
 const router = useRouter();
-
 const gameId = String(route.params.id);
 
 const game = computed(() =>
@@ -15,29 +13,18 @@ const game = computed(() =>
 );
 
 onMounted(async () => {
-  // Load and subscribe to pending updates
   await pendingStore.loadPendingGames();
-  pendingStore.subscribeToUpdates();
 
-  // ✅ Listen for "pending" updates (e.g., when new players join)
-  onPending((updated) => {
-    if (String(updated.id) === gameId) {
-      const idx = pendingStore.gameList.findIndex(g => String(g.id) === gameId);
-      if (idx !== -1) {
-        pendingStore.gameList[idx] = updated;
-      }
-    }
-  });
-
-  // ✅ Listen for "active" updates (when game starts)
-  onActive((activeGame) => {
-    if (String(activeGame.id) === gameId) {
-      console.log(`🎉 Game ${gameId} has started! Redirecting to /game/${gameId}`);
-      router.push(`/game/${activeGame.id}`);
+  // ✅ Let store handle redirect when game starts
+  pendingStore.subscribeToUpdates((id) => {
+    if (String(id) === gameId) {
+      console.log(`🎉 Game ${id} started — redirecting...`);
+      router.push(`/game/${id}`);
     }
   });
 });
 </script>
+
 
 <template>
   <div class="pending-page">

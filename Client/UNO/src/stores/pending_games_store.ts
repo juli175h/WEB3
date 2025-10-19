@@ -1,9 +1,15 @@
-import { defineStore } from 'pinia';
-import { ref } from 'vue';
-import type { PendingUno } from '../model/api';
-import { pending_games, onPending, new_game, join } from '../model/api';
+import { defineStore } from "pinia";
+import { ref } from "vue";
+import type { PendingUno } from "../model/game";
+import {
+  pending_games,
+  onPending,
+  onActive,
+  new_game,
+  join,
+} from "../model/api";
 
-export const usePendingUnoStore = defineStore('pending_uno', () => {
+export const usePendingUnoStore = defineStore("pending_uno", () => {
   const gameList = ref<PendingUno[]>([]);
   const loading = ref(false);
   const error = ref(false);
@@ -14,9 +20,9 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
     error.value = false;
     try {
       const res = await pending_games();
-      gameList.value = res.map((g) => ({ ...g }));
+      gameList.value = res.slice(); // shallow copy
     } catch (err) {
-      console.error('❌ Failed to load pending games:', err);
+      console.error("❌ Failed to load pending games:", err);
       error.value = true;
     } finally {
       loading.value = false;
@@ -24,72 +30,76 @@ export const usePendingUnoStore = defineStore('pending_uno', () => {
   }
 
   /* ---------------- Subscriptions ---------------- */
-  function subscribeToUpdates() {
-    try {
-      onPending((updated) => {
-        if (!updated) return;
+ function subscribeToUpdates(onBecameActive?: (id: string) => void) {
+  try {
+    // Listen for pending updates
+    onPending((updated) => {
+      if (!updated) return;
 
-        console.log('📩 Pending store received update:', updated);
+      const idx = gameList.value.findIndex((g) => g.id === updated.id);
 
-        // ✅ If the server signals pending=false, remove the lobby
-        if ((updated as any).pending === false) {
-          const id = (updated as any).id as string;
-          console.log('🧭 Removing lobby because game started:', id);
-          const idx = gameList.value.findIndex((g) => g.id === id);
-          if (idx !== -1) gameList.value.splice(idx, 1);
-          return;
-        }
+      if (updated.pending === false) {
+        console.log("🎯 Game became active — removing pending and redirecting:", updated.id);
+        if (idx !== -1) gameList.value.splice(idx, 1);
+        if (onBecameActive) onBecameActive(updated.id);
+        return;
+      }
 
-        // Normal pending update: merge or insert
-        const fresh = structuredClone(updated);
-        const idx = gameList.value.findIndex((g) => g.id === fresh.id);
-        if (idx !== -1) {
-          const prev = gameList.value[idx];
-          gameList.value[idx] = {
-            ...prev,
-            ...fresh,
-            players: fresh.players ?? prev.players ?? [],
-          };
-        } else {
-          gameList.value.push({
-            ...fresh,
-            players: fresh.players ?? [],
-          });
-        }
-      });
-    } catch (err) {
-      console.error('❌ Subscription error:', err);
-      error.value = true;
-    }
+      if (idx !== -1) {
+        gameList.value[idx] = { ...gameList.value[idx], ...updated };
+      } else {
+        gameList.value.push({ ...updated, players: updated.players ?? [] });
+      }
+    });
+
+    // Listen for active game updates (just in case client gets them first)
+    onActive((active) => {
+      const idx = gameList.value.findIndex((g) => g.id === active.id);
+      if (idx !== -1) gameList.value.splice(idx, 1);
+      if (onBecameActive) onBecameActive(active.id);
+    });
+  } catch (err) {
+    console.error("❌ Subscription error:", err);
+    error.value = true;
   }
+}
+
+
 
   /* ---------------- Mutations ---------------- */
   async function createGame(creator: string, numberOfPlayers: number) {
     const created = await new_game(numberOfPlayers, creator);
-    const fresh = structuredClone(created);
-    if (fresh.pending) {
-      gameList.value.push({ ...fresh, players: fresh.players ?? [] });
+
+    if ("creator" in created) {
+      // Pending
+      const idx = gameList.value.findIndex((g) => g.id === created.id);
+      if (idx !== -1) gameList.value[idx] = { ...gameList.value[idx], ...created };
+      else gameList.value.push({ ...created, players: created.players ?? [] });
+    } else {
+      // Became active immediately — remove any stale lobby
+      const idx = gameList.value.findIndex((g) => g.id === created.id);
+      if (idx !== -1) gameList.value.splice(idx, 1);
     }
-    return fresh;
+
+    return created;
   }
 
   async function joinGame(id: string, player: string) {
-    const found = gameList.value.find((g) => g.id === id);
-    if (!found) throw new Error('Game not found');
-    const joined = await join(found, player);
-    const fresh = structuredClone(joined);
-    const idx = gameList.value.findIndex((g) => g.id === fresh.id);
-    if (idx !== -1) {
-      const prev = gameList.value[idx];
-      gameList.value[idx] = {
-        ...prev,
-        ...fresh,
-        players: fresh.players ?? prev.players ?? [],
-      };
+    const lobby = gameList.value.find((g) => g.id === id);
+    if (!lobby) throw new Error("Game not found");
+
+    const joined = await join(lobby, player);
+
+    if ("creator" in joined) {
+      const idx = gameList.value.findIndex((g) => g.id === joined.id);
+      if (idx !== -1) gameList.value[idx] = { ...gameList.value[idx], ...joined };
+      else gameList.value.push({ ...joined, players: joined.players ?? [] });
     } else {
-      gameList.value.push({ ...fresh, players: fresh.players ?? [] });
+      const idx = gameList.value.findIndex((g) => g.id === joined.id);
+      if (idx !== -1) gameList.value.splice(idx, 1);
     }
-    return fresh;
+
+    return joined;
   }
 
   /* ---------------- Getters ---------------- */
