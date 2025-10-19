@@ -191,6 +191,26 @@ export async function game(id: string): Promise<IndexedUno | undefined> {
   return res.game ? from_graphql_game(res.game) : undefined;
 }
 
+/* --- Fetch current player's hand --- */
+interface HandQueryResult { hand: Card[] }
+import type { Card } from "../../../../Domain/src/model/UnoCard";
+export async function my_hand(id: string, player: string): Promise<Card[]> {
+  const res = await query<HandQueryResult>(gql`
+    query MyHand($id: ID!, $player: String!) {
+      hand(id: $id, player: $player) {
+        __typename
+        ... on NumberedCard { type color value }
+        ... on ReverseCard { type color value }
+        ... on SkipCard { type color value }
+        ... on DrawTwoCard { type color value }
+        ... on WildCard { type color value }
+        ... on WildDrawCard { type color value }
+      }
+    }
+  `, { id, player });
+  return res.hand ?? [];
+}
+
 export async function pending_games(): Promise<PendingUno[]> {
   const res = await query<PendingGamesQueryResult>(gql`
     query PendingGames {

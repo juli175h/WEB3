@@ -11,6 +11,7 @@ export interface API {
   game(id: string): Promise<IndexedUnoMatch | undefined>;
   pending_games(): Promise<PendingGame[]>;
   pending_game(id: string): Promise<PendingGame | undefined>;
+  hand(id: string, player: string): Promise<any[]>;
 }
 
 export function create_api(pubsub: PubSub, server: ServerModel): API {
@@ -88,6 +89,13 @@ export function create_api(pubsub: PubSub, server: ServerModel): API {
     game: (id) => server.game(id),
     pending_games: () => server.pending_games(),
     pending_game: (id) => server.pending_game(id),
+    async hand(id: string, player: string) {
+      const match = await server.game(id)
+      if (!match) throw new Error('Match not found')
+      const p = match.players.find((x) => x.name === player)
+      if (!p) throw new Error('Player not found')
+      return p.hand.cards
+    },
   };
 }
 

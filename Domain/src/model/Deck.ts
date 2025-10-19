@@ -29,20 +29,20 @@ export function createInitialDeck(): Deck {
     }
   }
 
-   // Action cards
+   // Action cards (each has value 20)
   for (let color of colors) {
-    cards.push({ type: "SKIP", color } as SkipCard)
-    cards.push({ type: "SKIP", color } as SkipCard)
-    cards.push({ type: "REVERSE", color } as ReverseCard)
-    cards.push({ type: "REVERSE", color } as ReverseCard)
-    cards.push({ type: "DRAW", color } as DrawTwoCard)
-    cards.push({ type: "DRAW", color } as DrawTwoCard)
+    cards.push({ type: "SKIP", color, value: 20 } as SkipCard)
+    cards.push({ type: "SKIP", color, value: 20 } as SkipCard)
+    cards.push({ type: "REVERSE", color, value: 20 } as ReverseCard)
+    cards.push({ type: "REVERSE", color, value: 20 } as ReverseCard)
+    cards.push({ type: "DRAW", color, value: 20 } as DrawTwoCard)
+    cards.push({ type: "DRAW", color, value: 20 } as DrawTwoCard)
   }
 
-    // Wild cards
+    // Wild cards (each has value 50)
   for (let i = 0; i < 4; i++) {
-    cards.push({ type: "WILD" } as WildCard)
-    cards.push({ type: "WILD DRAW" } as WildDrawCard)
+    cards.push({ type: "WILD", value: 50 } as WildCard)
+    cards.push({ type: "WILD DRAW", value: 50 } as WildDrawCard)
   }
 
   return {

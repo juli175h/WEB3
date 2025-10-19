@@ -26,6 +26,9 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
       async pending_game(_: any, { id }: { id: string }) {
         return api.pending_game(id);
       },
+      async hand(_: any, { id, player }: { id: string; player: string }) {
+        return api.hand(id, player);
+      },
     },
 
     Mutation: {
@@ -63,6 +66,49 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
     Game: {
       __resolveType(obj: any) {
         return obj.pending ? "PendingGame" : "ActiveMatch";
+      },
+    },
+
+    // Ensure GraphQL can resolve the concrete card type for unions/interfaces
+    AnyCard: {
+      __resolveType(obj: any) {
+        switch (obj?.type) {
+          case "NUMBERED":
+            return "NumberedCard";
+          case "SKIP":
+            return "SkipCard";
+          case "REVERSE":
+            return "ReverseCard";
+          case "DRAW":
+            return "DrawTwoCard";
+          case "WILD":
+            return "WildCard";
+          case "WILD DRAW":
+            return "WildDrawCard";
+          default:
+            return null;
+        }
+      },
+    },
+
+    Card: {
+      __resolveType(obj: any) {
+        switch (obj?.type) {
+          case "NUMBERED":
+            return "NumberedCard";
+          case "SKIP":
+            return "SkipCard";
+          case "REVERSE":
+            return "ReverseCard";
+          case "DRAW":
+            return "DrawTwoCard";
+          case "WILD":
+            return "WildCard";
+          case "WILD DRAW":
+            return "WildDrawCard";
+          default:
+            return null;
+        }
       },
     },
 

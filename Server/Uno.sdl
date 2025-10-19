@@ -94,6 +94,7 @@ type Query {
   game(id: ID!): ActiveMatch
   pending_games: [PendingGame!]!
   pending_game(id: ID!): PendingGame
+  hand(id: ID!, player: String!): [AnyCard!]!
 }
 
 type Mutation {
