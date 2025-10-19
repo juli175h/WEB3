@@ -7,6 +7,8 @@ const props = defineProps<{
   clickable?: boolean
 }>()
 
+defineEmits<{ (e: 'click'): void }>()
+
 // Compute the CSS class for the correct image
 const cardClass = computed(() => {
   const { card } = props
@@ -34,26 +36,35 @@ const cardClass = computed(() => {
   }
 })
 
+// Preload all card images and index them by filename
+const imageMap = import.meta.glob('/src/assets/Cards/*.png', { eager: true, as: 'url' }) as Record<string, string>
+
+function resolveImage(filename: string): string {
+    // Keys are like: '/src/assets/Cards/uno_card-red3.png'
+    const key = `/src/assets/Cards/${filename}`
+    return imageMap[key] || ''
+}
+
 const cardImage = computed(() => {
-  const { card } = props
-  if (card.type === "WILD") return new URL("@/assets/Cards/uno_card-wildchange.png", import.meta.url).href
-  if (card.type === "WILD DRAW") return new URL("@/assets/Cards/uno_card-wilddraw4.png", import.meta.url).href
+    const { card } = props
+    if (card.type === 'WILD') return resolveImage('uno_card-wildchange.png')
+    if (card.type === 'WILD DRAW') return resolveImage('uno_card-wilddraw4.png')
 
-  const color = card.color?.toLowerCase()
-  if (!color) return ""
+    const color = card.color?.toLowerCase()
+    if (!color) return ''
 
-  if (card.type === "NUMBERED") return new URL(`@/assets/Cards/uno_card-${color}${card.value}.png`, import.meta.url).href
-  if (card.type === "DRAW") return new URL(`@/assets/Cards/uno_card-${color}draw2.png`, import.meta.url).href
-  if (card.type === "SKIP") return new URL(`@/assets/Cards/uno_card-${color}skip.png`, import.meta.url).href
-  if (card.type === "REVERSE") return new URL(`@/assets/Cards/uno_card-${color}reverse.png`, import.meta.url).href
-  return ""
+    if (card.type === 'NUMBERED') return resolveImage(`uno_card-${color}${card.value}.png`)
+    if (card.type === 'DRAW') return resolveImage(`uno_card-${color}draw2.png`)
+    if (card.type === 'SKIP') return resolveImage(`uno_card-${color}skip.png`)
+    if (card.type === 'REVERSE') return resolveImage(`uno_card-${color}reverse.png`)
+    return ''
 })
 </script>
 
 <template>
-  <div class="card">
-    <img :src="cardImage" alt="UNO card" />
-  </div>
+        <div class="card" :class="{ clickable: props.clickable }" @click="$emit('click')">
+        <img :src="cardImage" alt="UNO card" />
+    </div>
 </template>
 
 <style>

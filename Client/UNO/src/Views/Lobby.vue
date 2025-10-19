@@ -2,9 +2,13 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePendingUnoStore } from '../stores/pending_games_store';
+import { usePlayerStore } from '../stores/player_store';
+import { useOngoingUnoStore } from '../stores/ongoing_games_store';
 
 const pendingStore = usePendingUnoStore();
 const router = useRouter();
+const user = usePlayerStore();
+const localStore = useOngoingUnoStore();
 
 const playerName = ref('');
 const maxPlayers = ref(2);
@@ -23,19 +27,21 @@ const pendingGames = computed(() => pendingStore.pending());
 // Create a new game
 async function createGame() {
   if (!playerName.value) return alert('Enter your name!');
-  const game = await pendingStore.createGame(playerName.value, maxPlayers.value);
-
-  // ✅ Handle both pending and active results
-  if (game.pending) {
-    router.push(`/pending/${game.id}`);
-  } else {
-    router.push(`/game/${game.id}`);
+  user.player = playerName.value;
+  // Create or ensure a local host game will have id=1 (first match this session)
+  if (!localStore.game(1)) {
+    localStore.createMatch([playerName.value, 'CPU']);
   }
+  // Still create the server lobby so joiners can find it
+  pendingStore.createGame(playerName.value, maxPlayers.value).catch(console.error);
+  // Route host to local game/1 regardless of server id
+  router.push('/game/1');
 }
 
 // Join an existing game
 async function joinGame(id: string) {
   if (!playerName.value) return alert('Enter your name!');
+  user.player = playerName.value;
   const joined = await pendingStore.joinGame(id, playerName.value);
 
   // ✅ Go to pending if still waiting, or directly to game if lobby is full
