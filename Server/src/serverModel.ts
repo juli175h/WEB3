@@ -110,14 +110,26 @@ export class ServerModel {
     return match;
   }
 
+  /** Player chooses not to play after drawing — advance to next player */
+  async skip(id: string, player: string) {
+    const match = await this.store.game(id);
+    if (!match) throw new Error("Match not found");
+
+    const round = match.currentRound;
+    // advance to next player
+    round.currentPlayerIndex = (round.currentPlayerIndex + round.playDirection + round.players.length) % round.players.length;
+    await this.store.update(match);
+    return match;
+  }
+
   /** Player plays a card from hand by index */
   async play(id: string, player: string, handIndex: number, chosenColor?: Color) {
     const match = await this.store.game(id);
     if (!match) throw new Error("Match not found");
 
     const round = match.currentRound;
-    const card = round.currentPlayer.hand.cards[handIndex];
-    round.playCard(round.currentPlayer, card);
+  const card = round.currentPlayer.hand.cards[handIndex];
+  round.playCard(round.currentPlayer, card, chosenColor);
 
     if (round.isRoundOver()) {
       match.finishRound();

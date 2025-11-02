@@ -54,7 +54,7 @@ export class UnoGame {
     return colors[Math.floor(Math.random() * colors.length)];
   }
 
-  private applyCardEffect(card: Card) {
+  private applyCardEffect(card: Card, chosenColor?: Color) {
     switch (card.type) {
       case "SKIP":
         this.nextPlayer();
@@ -67,24 +67,24 @@ export class UnoGame {
         this.currentPlayer.draw(this.drawPile, 2);
         break;
       case "WILD DRAW":
-        card.color = this.chooseColor();
+        card.color = chosenColor ?? this.chooseColor();
         this.nextPlayer();
         this.currentPlayer.draw(this.drawPile, 4);
         break;
       case "WILD":
-        card.color = this.chooseColor();
+        card.color = chosenColor ?? this.chooseColor();
         break;
     }
   }
 
-  playCard(player: Player, card: Card) {
+  playCard(player: Player, card: Card, chosenColor?: Color) {
     if (!this.isLegalCard(card, this.discardPile.top())) {
       throw new Error("Illegal move");
     }
 
     player.hand.play(card);
     this.discardPile.add(card);
-    this.applyCardEffect(card);
+    this.applyCardEffect(card, chosenColor);
     this.nextPlayer();
   }
 

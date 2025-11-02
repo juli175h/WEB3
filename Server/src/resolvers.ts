@@ -61,6 +61,11 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
         pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(g) });
         return g;
       },
+      async skip(_: any, { id, player }: { id: string; player: string }) {
+        const g = await api.skip(id, player);
+        pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(g) });
+        return g;
+      },
     },
 
     Game: {

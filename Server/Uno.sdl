@@ -57,7 +57,7 @@ union AnyCard =
   | WildDrawCard
 
 type Player {
-  id: Int!
+  id: ID!
   name: String!
   score: Int!
   handCount: Int
@@ -102,6 +102,7 @@ type Mutation {
   join(id: ID!, player: String!): Game!
   draw(id: ID!, player: String!): ActiveMatch!
   playCardByIndex(id: ID!, player: String!, handIndex: Int!, chosenColor: Color): ActiveMatch!
+  skip(id: ID!, player: String!): ActiveMatch!
 }
 
 type Subscription {

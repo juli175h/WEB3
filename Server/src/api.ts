@@ -12,6 +12,7 @@ export interface API {
   pending_games(): Promise<PendingGame[]>;
   pending_game(id: string): Promise<PendingGame | undefined>;
   hand(id: string, player: string): Promise<any[]>;
+  skip(id: string, player: string): Promise<IndexedUnoMatch>;
 }
 
 export function create_api(pubsub: PubSub, server: ServerModel): API {
@@ -85,6 +86,12 @@ export function create_api(pubsub: PubSub, server: ServerModel): API {
       return g;
     },
 
+    async skip(id: string, player: string) {
+      const g = await server.skip(id, player);
+      await broadcast(g);
+      return g;
+    },
+
     games: () => server.games(),
     game: (id) => server.game(id),
     pending_games: () => server.pending_games(),
@@ -123,8 +130,9 @@ export function toGraphQLMatch(match: IndexedUnoMatch) {
           handCount: match.winner.hand?.length ?? 0,
         }
       : null,
+    // make player id unique per match to avoid client-side cache/entity collisions
     players: match.players.map((p) => ({
-      id: p.id,
+      id: `${match.id}-${p.id}`,
       name: p.name,
       score: p.score,
       handCount: p.hand?.length ?? 0,

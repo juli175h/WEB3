@@ -3,7 +3,7 @@ import type { Color, Card } from "../../../../Domain/src/model/UnoCard";
 /** ---------------- Uno Game Types ---------------- */
 
 export type PublicPlayer = {
-  id: number;
+  id: number | string;
   name: string;
   score: number;
   handCount: number;

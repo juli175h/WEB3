@@ -247,6 +247,7 @@ interface NewGameResult { new_game: any; }
 interface JoinResult { join: any; }
 interface DrawResult { draw: any; }
 interface PlayResult { playCardByIndex: any; }
+interface SkipResult { skip: any }
 
 /* --- New Game --- */
 /* --- New Game --- */
@@ -454,4 +455,33 @@ export async function playCardByIndex(
     }
   `, { id, player, handIndex, chosenColor });
   return from_graphql_game(res.playCardByIndex);
+}
+
+export async function skipTurn(id: string, player: string) {
+  const res = await mutate<SkipResult>(gql`
+    mutation Skip($id: ID!, $player: String!) {
+      skip(id: $id, player: $player) {
+        id
+        pending
+        finished
+        winner { id name score handCount }
+        players { id name score handCount }
+        currentRound {
+          currentPlayerIndex
+          direction
+          discardTop {
+            __typename
+            ... on NumberedCard { type color value }
+            ... on ReverseCard { type color value }
+            ... on SkipCard { type color value }
+            ... on DrawTwoCard { type color value }
+            ... on WildCard { type color value }
+            ... on WildDrawCard { type color value }
+          }
+          drawPileCount
+        }
+      }
+    }
+  `, { id, player });
+  return from_graphql_game(res.skip);
 }
