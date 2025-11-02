@@ -2,8 +2,10 @@
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePendingUnoStore } from '../stores/pending_games_store';
+import { usePlayerStore } from '../stores/player_store';
 
 const pendingStore = usePendingUnoStore();
+const user = usePlayerStore();
 const route = useRoute();
 const router = useRouter();
 const gameId = String(route.params.id);
@@ -13,6 +15,12 @@ const game = computed(() =>
 );
 
 onMounted(async () => {
+  // Guard: if no player name is set, send user back to lobby to enter a name
+  if (!user.player) {
+    router.push('/');
+    return;
+  }
+
   await pendingStore.loadPendingGames();
 
   // ✅ Let store handle redirect when game starts

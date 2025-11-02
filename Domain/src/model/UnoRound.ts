@@ -60,6 +60,10 @@ export class UnoGame {
         this.nextPlayer();
         break;
       case "REVERSE":
+        // In 2-player games, REVERSE acts like SKIP (the other player loses their turn)
+        if (this.players.length === 2) {
+          this.nextPlayer();
+        }
         this.playDirection *= -1;
         break;
       case "DRAW":

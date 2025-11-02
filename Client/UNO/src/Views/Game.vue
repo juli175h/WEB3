@@ -59,6 +59,11 @@ const myScore = computed(() => {
   return p?.score ?? 0
 })
 
+// Winner modal state (derived from active match)
+const isFinished = computed(() => !!active.value?.finished)
+const winnerName = computed(() => active.value?.winner?.name ?? '')
+function goToLobby() { router.push('/') }
+
 // Local fallback for the discard top so the acting player sees the card immediately
 const lastDiscard = ref<UnoCard | null>(null)
 const cardToShow = computed<UnoCard | null>(() => discardTop.value ?? lastDiscard.value)
@@ -74,6 +79,7 @@ const pendingWildIndex = ref<number | null>(null)
 const showDrawModal = ref(false)
 const drawnCard = ref<UnoCard | null>(null)
 const drawnIndex = ref<number | null>(null)
+const drawnPlayable = ref<boolean>(false)
 
 function openColorPickerFor(index: number) {
   pendingWildIndex.value = index
@@ -83,12 +89,17 @@ function openColorPickerFor(index: number) {
 async function chooseColor(color: string) {
   if (pendingWildIndex.value === null) return
   const idx = pendingWildIndex.value
+  // snapshot the card being played for local fallback after success
+  const played = hand.value[idx] ?? null
   try {
-    // show the played card immediately
-    lastDiscard.value = hand.value[idx] ?? null
     active.value = await playCardByIndex(String(active.value?.id), user.player!, idx, color)
     await loadHand()
-    if (active.value?.currentRound?.discardTop) lastDiscard.value = null
+    // If server already returned a discardTop we use that; otherwise show a local fallback
+    if (active.value?.currentRound?.discardTop) {
+      lastDiscard.value = null
+    } else if (played) {
+      lastDiscard.value = played as UnoCard
+    }
   } catch (e: any) {
     err.value = e?.message ?? 'Illegal move'
     clearErrSoon()
@@ -101,6 +112,72 @@ async function chooseColor(color: string) {
 function cancelColorPick() {
   showColorPicker.value = false
   pendingWildIndex.value = null
+}
+
+async function onDraw() {
+  if (!active.value || !user.player || !isYourTurn.value) return
+  // close any wild picker
+  showColorPicker.value = false
+  pendingWildIndex.value = null
+  try {
+    const before = hand.value.slice()
+    // perform draw on server
+    active.value = await apiDraw(String(active.value.id), user.player)
+    // fetch updated hand
+    const updated = await my_hand(String(active.value.id), user.player)
+    // compute which card was drawn (multiset diff)
+    const keyFor = (c: any) => `${c.type}::${c.color ?? ''}::${c.value ?? ''}`
+    const counts: Record<string, number> = {}
+    for (const c of before) counts[keyFor(c)] = (counts[keyFor(c)] || 0) + 1
+    let drawn: any = null
+    let drawnIdx: number | null = null
+    for (let i = 0; i < updated.length; i++) {
+      const c = updated[i]
+      const k = keyFor(c)
+      if ((counts[k] || 0) > 0) {
+        counts[k] = counts[k] - 1
+        continue
+      }
+      drawn = c
+      drawnIdx = i
+      break
+    }
+    // fallback: if lengths grew and diff didn't detect, assume last card
+    if (!drawn || drawnIdx === null) {
+      if (updated.length > before.length) {
+        drawn = updated[updated.length - 1]
+        drawnIdx = updated.length - 1
+      }
+    }
+  // update local hand to latest
+  hand.value = updated
+  // ensure we have a fresh top-of-discard from server after draw
+  const fresh = await fetchGame(String(active.value.id))
+  if (fresh) active.value = fresh
+  // clear any local fallback so we always show the authoritative top card after draw
+  lastDiscard.value = null
+    // if a new card exists, open the draw modal; Play button enabled only if playable
+    if (drawn && drawnIdx !== null) {
+      const top = cardToShow.value
+      const isPlayableCard = (pc: any, topc: any) => {
+        if (!topc) return true
+        if (pc.type === 'WILD' || pc.type === 'WILD DRAW') return true
+        if (pc.type === 'NUMBERED' && topc.type === 'NUMBERED') {
+          return pc.color === topc.color || pc.value === topc.value
+        }
+        if (pc.type === topc.type) return true
+        if (pc.color && topc.color && pc.color === topc.color) return true
+        return false
+      }
+      drawnCard.value = drawn
+      drawnIndex.value = drawnIdx
+      drawnPlayable.value = isPlayableCard(drawn, top)
+      showDrawModal.value = true
+    }
+  } catch (e: any) {
+    err.value = e?.message ?? 'Cannot draw now'
+    clearErrSoon()
+  }
 }
 
 // Play the drawn card (from the draw modal)
@@ -120,10 +197,13 @@ async function playDrawnCard() {
   }
 
   try {
-    lastDiscard.value = card
     active.value = await playCardByIndex(String(active.value.id), user.player, idx)
     await loadHand()
-    if (active.value?.currentRound?.discardTop) lastDiscard.value = null
+    if (active.value?.currentRound?.discardTop) {
+      lastDiscard.value = null
+    } else {
+      lastDiscard.value = card
+    }
   } catch (e: any) {
     err.value = e?.message ?? 'Illegal move'
     clearErrSoon()
@@ -131,88 +211,23 @@ async function playDrawnCard() {
     showDrawModal.value = false
     drawnCard.value = null
     drawnIndex.value = null
+    drawnPlayable.value = false
   }
 }
 
-// Skip (end turn) after drawing
+// Skip after drawing (ends your turn)
 async function skipDrawnCard() {
   if (!active.value || !user.player) return
   try {
-    active.value = await skipTurn(String(active.value.id), user.player)
-    await loadHand()
-    lastDiscard.value = null
+    await skipTurn(String(active.value.id), user.player)
   } catch (e: any) {
-    err.value = e?.message ?? 'Cannot skip'
+    err.value = e?.message ?? 'Cannot skip now'
     clearErrSoon()
   } finally {
     showDrawModal.value = false
     drawnCard.value = null
     drawnIndex.value = null
-  }
-}
-
-async function onDraw() {
-  if (!active.value || !user.player || !isYourTurn.value) return
-  try {
-    // keep previous hand snapshot so we can detect the new drawn card
-    const before = hand.value.slice();
-    // perform draw on server (card will be appended to player's hand on server)
-    active.value = await apiDraw(String(active.value.id), user.player)
-    // fetch updated hand
-    const updated = await my_hand(String(active.value.id), user.player)
-    // compute drawn card (simple multiset diff using serialised key)
-    function keyFor(c: any) { return `${c.type}::${c.color ?? ''}::${c.value ?? ''}` }
-    const counts: Record<string, number> = {};
-    for (const c of before) counts[keyFor(c)] = (counts[keyFor(c)] || 0) + 1;
-    let drawn: any = null;
-    let drawnIdx: number | null = null;
-    for (let i = 0; i < updated.length; i++) {
-      const c = updated[i];
-      const k = keyFor(c);
-      if ((counts[k] || 0) > 0) {
-        counts[k] = counts[k] - 1;
-        continue;
-      }
-      // this card is an extra one — treat as drawn
-      drawn = c;
-      drawnIdx = i;
-      break;
-    }
-
-    // replace hand with updated (we will show modal if playable)
-    hand.value = updated;
-
-    // if server returned a discardTop, clear fallback
-    if (active.value?.currentRound?.discardTop) lastDiscard.value = null
-
-    // if we detected a drawn card and it's playable against current discard, open modal
-    if (drawn && drawnIdx !== null) {
-      const top = cardToShow.value
-      function isPlayableCard(pc: any, topc: any) {
-        if (!topc) return true
-        if (pc.type === 'WILD' || pc.type === 'WILD DRAW') return true
-        if (pc.type === topc.type) {
-          if (pc.type === 'NUMBERED' && topc.type === 'NUMBERED') {
-            return pc.color === topc.color || pc.value === topc.value
-          }
-          return true
-        }
-        if (pc.color && topc.color && pc.color === topc.color) return true
-        return false
-      }
-
-      if (isPlayableCard(drawn, top)) {
-        // show modal with the drawn card and the option to play or skip
-        drawnCard.value = drawn
-        drawnIndex.value = drawnIdx
-        showDrawModal.value = true
-        return
-      }
-    }
-
-  } catch (e: any) {
-    err.value = e?.message ?? 'Cannot draw now'
-    clearErrSoon()
+    drawnPlayable.value = false
   }
 }
 
@@ -244,12 +259,14 @@ async function onPlay(idx: number) {
   }
 
   try {
-    // store locally the played card so the actor immediately sees it
-    lastDiscard.value = hand.value[idx] ?? null
     active.value = await playCardByIndex(String(active.value.id), user.player, idx)
     await loadHand()
     // if server returned a discardTop, clear local fallback
-    if (active.value?.currentRound?.discardTop) lastDiscard.value = null
+    if (active.value?.currentRound?.discardTop) {
+      lastDiscard.value = null
+    } else {
+      lastDiscard.value = card
+    }
   } catch (e: any) {
     err.value = e?.message ?? 'Illegal move'
     clearErrSoon()
@@ -327,19 +344,31 @@ async function onPlay(idx: number) {
             <button @click="cancelColorPick">Cancel</button>
           </div>
         </div>
+      </div>
 
-        <!-- Draw result modal -->
-        <div v-if="showDrawModal" class="modal-overlay">
-          <div class="modal">
-            <h4>Drawn card</h4>
-            <div class="drawn-card">
-              <Card v-if="drawnCard" :card="drawnCard!" />
-            </div>
-            <p>Would you like to play this card or skip your turn?</p>
-            <div class="modal-actions">
-              <button @click="playDrawnCard">Play</button>
-              <button @click="skipDrawnCard">Skip</button>
-            </div>
+      <!-- Draw result modal -->
+      <div v-if="showDrawModal" class="modal-overlay">
+        <div class="modal">
+          <h4>Drawn card</h4>
+          <div class="drawn-card">
+            <Card v-if="drawnCard" :card="drawnCard!" />
+          </div>
+          <p>Would you like to play this card or skip your turn?</p>
+          <div class="modal-actions">
+            <button @click="playDrawnCard" :disabled="!drawnPlayable">Play</button>
+            <button @click="skipDrawnCard">Skip</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Winner modal -->
+      <div v-if="isFinished" class="modal-overlay">
+        <div class="modal">
+          <h3>Game Over</h3>
+          <p v-if="winnerName">{{ winnerName }} reached 500 points and wins!</p>
+          <p v-else>We have a winner!</p>
+          <div class="modal-actions">
+            <button @click="goToLobby">Return to Lobby</button>
           </div>
         </div>
       </div>
@@ -375,6 +404,16 @@ async function onPlay(idx: number) {
 .actions { margin-top: 0.75rem; }
 .hint { color: #777; margin-top: 0.25rem; }
 .error { color: #b10000; margin-top: 0.25rem; }
+
+/* Hand layout */
+.hand .cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.hand .cards .card {
+  flex: 0 0 auto;
+}
 
 /* Modal styles */
 .modal-overlay {

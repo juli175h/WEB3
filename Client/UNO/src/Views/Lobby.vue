@@ -19,7 +19,7 @@ onMounted(async () => {
 
   // load current active games
     try {
-    const loaded = await fetchActiveGames();
+  const loaded = await fetchActiveGames();
     // debug: log raw fetched active games
     console.log('[Lobby] fetched active games (raw):', loaded);
       // debug: check for shared player array references between games
@@ -37,9 +37,10 @@ onMounted(async () => {
         }
       }
     // normalize and dedupe by id
-    const map = new Map<string, IndexedUno>();
-    for (const g of loaded) map.set(String(g.id), g);
-    activeGames.value = Array.from(map.values());
+  const noFinished = loaded.filter(g => !g.finished);
+  const map = new Map<string, IndexedUno>();
+  for (const g of noFinished) map.set(String(g.id), g);
+  activeGames.value = Array.from(map.values());
     console.log('[Lobby] activeGames normalized:', activeGames.value);
     // debug: also check normalized array for shared player references
     if (Array.isArray(activeGames.value)) {
@@ -65,7 +66,7 @@ onMounted(async () => {
   // (keeps player lists correct and avoids any merge/duplication issues)
   onActive(async () => {
     try {
-      const refreshed = await fetchActiveGames();
+  const refreshed = await fetchActiveGames();
       // debug: log refresh payload
       console.log('[Lobby] onActive refresh (raw):', refreshed);
       // debug: check refreshed for shared players arrays
@@ -79,9 +80,10 @@ onMounted(async () => {
         }
       }
       // normalize by id to keep stable ordering
-      const map = new Map<string, IndexedUno>();
-      for (const gg of refreshed) map.set(String(gg.id), gg);
-      activeGames.value = Array.from(map.values());
+  const noFinished = refreshed.filter(g => !g.finished);
+  const map = new Map<string, IndexedUno>();
+  for (const gg of noFinished) map.set(String(gg.id), gg);
+  activeGames.value = Array.from(map.values());
       console.log('[Lobby] onActive activeGames normalized:', activeGames.value);
     } catch (e) {
       console.error('Failed to refresh active games on update', e);
