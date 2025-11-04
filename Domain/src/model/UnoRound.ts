@@ -30,12 +30,10 @@ export class UnoGame {
   }
 
   private dealFirstCard() {
-    let card = this.drawPile.deal();
-    while (card?.type === "WILD" || card?.type === "WILD DRAW") {
-      this.drawPile.add(card);
-      this.drawPile.shuffle();
-      card = this.drawPile.deal();
-    }
+    // Deal the very first card to the discard pile as-is.
+    // If it's a WILD/WILD DRAW, we intentionally leave its color unset (null)
+    // so the client can display a neutral wild and apply rules accordingly.
+    const card = this.drawPile.deal();
     if (card) this.discardPile.add(card);
   }
 
@@ -115,6 +113,11 @@ export class UnoGame {
 
   private isLegalCard(playerCard: Card, topCard?: Card) {
     if (!topCard) return true;
+    // If the top card is a wild without a chosen color (e.g., initial card),
+    // allow any card to be played. This avoids forcing a random color.
+    if ((topCard.type === "WILD" || topCard.type === "WILD DRAW") && !topCard.color) {
+      return true;
+    }
     if (playerCard.type === "WILD" || playerCard.type === "WILD DRAW") return true;
 
     if (playerCard.type === topCard.type) {
