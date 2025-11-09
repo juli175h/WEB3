@@ -1,11 +1,18 @@
 {
-  "files": [],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    },
-    {
-      "path": "./tsconfig.app.json"
-    }
-  ]
+  "compilerOptions": {
+    "target": "ESNext",                        // Modern JS target
+    "module": "ESNext",                        // Use ES modules
+    "lib": ["DOM", "ESNext"],                  // Browser + modern JS features
+    "jsx": "react-jsx",                        // ✅ Enable React 17/18 JSX transform
+    "strict": true,                            // Enable strict type-checking
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true               // Required for type-only imports
+  },
+  "include": ["src"],                          // All React source files
+  "exclude": ["node_modules", "**/*.vue"]      // Exclude Vue files if present
 }

@@ -1,4 +1,4 @@
-import type { Color, Card } from "../../../../Domain/src/model/UnoCard";
+import type { Color, Card } from "Domain/src/model/UnoCard";
 
 /** ---------------- Uno Game Types ---------------- */
 

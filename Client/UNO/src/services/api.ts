@@ -102,7 +102,7 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
 }
 
 /** Listen for pending game updates (remove when pending=false) */
-export async function onPending(subscriber: (g: PendingUno) => any) {
+export function onPending(subscriber: (g: PendingUno) => any) {
   const q = gql`
     subscription PendingSub {
       pending {
@@ -114,8 +114,9 @@ export async function onPending(subscriber: (g: PendingUno) => any) {
       }
     }
   `;
+
   const obs = apollo.subscribe<PendingSubscriptionResult>({ query: q });
-  obs.subscribe({
+  const subscription = obs.subscribe({
     next(payload) {
       const data = payload.data;
       if (data?.pending) subscriber(data.pending);
@@ -124,7 +125,10 @@ export async function onPending(subscriber: (g: PendingUno) => any) {
       console.error("❌ Pending subscription error:", err);
     },
   });
+
+  return subscription; // returns the object with unsubscribe
 }
+
 
 /* ---------------- Queries ---------------- */
 
@@ -193,7 +197,7 @@ export async function game(id: string): Promise<IndexedUno | undefined> {
 
 /* --- Fetch current player's hand --- */
 interface HandQueryResult { hand: Card[] }
-import type { Card } from "../../../../Domain/src/model/UnoCard";
+import type { Card } from "Domain/src/model/UnoCard";
 export async function my_hand(id: string, player: string): Promise<Card[]> {
   const res = await query<HandQueryResult>(gql`
     query MyHand($id: ID!, $player: String!) {
@@ -249,7 +253,6 @@ interface DrawResult { draw: any; }
 interface PlayResult { playCardByIndex: any; }
 interface SkipResult { skip: any }
 
-/* --- New Game --- */
 /* --- New Game --- */
 export async function new_game(
   number_of_players: number,
