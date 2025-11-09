@@ -1,127 +1,62 @@
+import type { Card, Color } from "./UnoCard";
+import { standardShuffler } from "../utils/random_utils";
 
-import { standardShuffler } from "../utils/random_utils"
-import type { Card, NumberedCard, WildCard, ReverseCard, SkipCard, DrawTwoCard, WildDrawCard, Color } from "../model/UnoCard"
+export type Deck = { cards: Card[] };
+export const colors: Color[] = ["RED", "BLUE", "GREEN", "YELLOW"];
 
-export const colors: Color[] = ["RED", "BLUE", "GREEN", "YELLOW"]
+export const createEmptyDeck = (): Deck => ({ cards: [] });
 
-export interface Deck {
-  cards: Card[]
-  shuffle: () => void
-}
-
-export function createEmptyDeck(): Deck {
-  const cards: Card[] = []
-  return {
-    cards,
-    shuffle: () => standardShuffler(cards),
-  }
-}
-
-export function createInitialDeck(): Deck {
-  const cards: Card[] = []
+export const createInitialDeck = (): Deck => {
+  const cards: Card[] = [];
 
   // Numbered cards
-  for (let color of colors) {
-    cards.push({ type: "NUMBERED", color, value: 0 } as NumberedCard)
+  for (const color of colors) {
+    cards.push({ type: "NUMBERED", color, value: 0 });
     for (let n = 1; n <= 9; n++) {
-      cards.push({ type: "NUMBERED", color, value: n } as NumberedCard)
-      cards.push({ type: "NUMBERED", color, value: n } as NumberedCard)
+      cards.push({
+        type: "NUMBERED",
+        color,
+        value: n as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, // ✅ cast for literal union
+      });
+      cards.push({
+        type: "NUMBERED",
+        color,
+        value: n as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
+      });
     }
   }
 
-   // Action cards (each has value 20)
-  for (let color of colors) {
-    cards.push({ type: "SKIP", color, value: 20 } as SkipCard)
-    cards.push({ type: "SKIP", color, value: 20 } as SkipCard)
-    cards.push({ type: "REVERSE", color, value: 20 } as ReverseCard)
-    cards.push({ type: "REVERSE", color, value: 20 } as ReverseCard)
-    cards.push({ type: "DRAW", color, value: 20 } as DrawTwoCard)
-    cards.push({ type: "DRAW", color, value: 20 } as DrawTwoCard)
+  // Action cards
+  for (const color of colors) {
+    ["SKIP", "REVERSE", "DRAW"].forEach((type) => {
+      cards.push({ type, color, value: 20 } as Card);
+      cards.push({ type, color, value: 20 } as Card);
+    });
   }
 
-    // Wild cards (each has value 50)
+  // Wild cards
   for (let i = 0; i < 4; i++) {
-    cards.push({ type: "WILD", value: 50 } as WildCard)
-    cards.push({ type: "WILD DRAW", value: 50 } as WildDrawCard)
+    cards.push({ type: "WILD", value: 50 } as Card);
+    cards.push({ type: "WILD DRAW", value: 50 } as Card);
   }
 
-  return {
-    cards,
-    shuffle: () => standardShuffler(cards)
-  }
-}
+  // ✅ Shuffle safely and return
+  const shuffled = [...cards];
+  standardShuffler(shuffled);
+  return { cards: shuffled };
+};
 
-export class DrawPile implements Deck {
-  cards: Card[]
+export const shuffleDeck = (deck: Deck): Deck => {
+  const shuffled = [...deck.cards];
+  standardShuffler(shuffled);
+  return { cards: shuffled };
+};
 
-  constructor(cards: Card[]) {
-    this.cards = cards
-  }
+export const drawCard = (deck: Deck): [Card | undefined, Deck] => {
+  const [first, ...rest] = deck.cards;
+  return [first, { cards: rest }];
+};
 
-  shuffle() {
-    standardShuffler(this.cards)
-  }
-
-  deal(): Card | undefined {
-    return this.cards.shift()
-  }
-
-  get size() {
-    return this.cards.length
-  }
-   add(card: Card) {
-    this.cards.push(card)
-  }
-
-}
-
-export class Hand implements Deck {
-  cards: Card[]
-  
-
-  constructor(cards: Card[]) {
-    this.cards = cards
-
-    
-  }
-   get length(): number {
-    return this.cards.length
-  }
-
-  shuffle() {
-    standardShuffler(this.cards)
-  }
-
-  add(card: Card) {
-    this.cards.push(card)
-  }
-
-  play(card: Card) {
-    const index = this.cards.indexOf(card)
-    if (index !== -1) this.cards.splice(index, 1)
-  }
-
-  get size() {
-    return this.cards.length
-  }
-}
-
-export class DiscardPile implements Deck {
-  cards: Card[] = []
-
-  shuffle() {
-    
-  }
-
-  add(card: Card) {
-    this.cards.push(card)
-  }
-
-  top(): Card | undefined {
-    return this.cards[this.cards.length - 1]
-  }
-
-  size() {
-    return this.cards.length
-  }
-}
+export const addCard = (deck: Deck, card: Card): Deck => ({
+  cards: [...deck.cards, card],
+});

@@ -1,49 +1,64 @@
-import { UnoGame } from "./UnoRound";
-import { Player } from "./Player";
+import type { Player } from "./Player";
+import type { UnoGame } from "./UnoRound";
+import { createPlayer } from "./Player";
+import { createGame } from "./UnoRound";
 
 const WINNING_SCORE = 500;
 
-export class UnoMatch {
-  readonly players: Player[];
-  readonly rounds: UnoGame[];
-  finished = false;
+export type UnoMatch = {
+  players: Player[];
+  rounds: UnoGame[];
+  finished: boolean;
   winner?: Player;
+};
 
-  constructor(playerNames: string[]) {
-    this.players = playerNames.map((n, i) => new Player(i, n));
-    this.rounds = [];
-    this.startNewRound();
-  }
+// Create a new match
+export const createMatch = (playerNames: string[]): UnoMatch => {
+  const players = playerNames.map((name, i) => createPlayer(i, name));
+  const firstRound = createGame(players);
+  return {
+    players,
+    rounds: [firstRound],
+    finished: false,
+  };
+};
 
-  get currentRound(): UnoGame {
-    return this.rounds[this.rounds.length - 1];
-  }
+// Get current round
+export const currentRound = (match: UnoMatch): UnoGame =>
+  match.rounds[match.rounds.length - 1];
 
-  startNewRound(): void {
-    const round = new UnoGame(this.players);
-    this.rounds.push(round);
-  }
+// Start a new round (if match not finished)
+export const startNewRound = (match: UnoMatch): UnoMatch => {
+  if (match.finished) return match;
+  const newRound = createGame(match.players);
+  return { ...match, rounds: [...match.rounds, newRound] };
+};
 
-  finishRound(): void {
-    const round = this.currentRound;
-    const winner = round.finishRound();
-    if (!winner) return;
+// Finish a round, updating scores and checking for winner
+export const finishRound = (
+  match: UnoMatch,
+  winnerId: number,
+  calculateHandPoints: (player: Player) => number
+): UnoMatch => {
+  const winner = match.players.find(p => p.id === winnerId);
+  if (!winner) return match;
 
-    let roundPoints = 0;
-    for (const player of round.players) {
-      if (player !== winner) {
-        roundPoints += round.calculateHandPoints(player.hand);
-      }
-    }
+  const roundPoints = match.players
+    .filter(p => p.id !== winnerId)
+    .reduce((sum, p) => sum + calculateHandPoints(p), 0);
 
-    winner.score += roundPoints;
-    console.log(`🎉 ${winner.name} earns ${roundPoints} (total: ${winner.score})`);
+  const updatedPlayers = match.players.map(p =>
+    p.id === winnerId ? { ...p, score: p.score + roundPoints } : p
+  );
 
-    if (winner.score >= WINNING_SCORE) {
-      this.finished = true;
-      this.winner = winner;
-    } else {
-      this.startNewRound();
-    }
-  }
-}
+  const winnerNow = updatedPlayers.find(p => p.score >= WINNING_SCORE);
+  const finished = !!winnerNow;
+
+  return {
+    ...match,
+    players: updatedPlayers,
+    finished,
+    winner: finished ? winnerNow : match.winner,
+    rounds: match.rounds,
+  };
+};

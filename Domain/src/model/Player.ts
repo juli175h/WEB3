@@ -1,29 +1,38 @@
-import type { Card } from "./UnoCard"
-import { createEmptyDeck, DrawPile, DiscardPile, Hand } from "./deck"
+import type { Deck } from "./deck";
+import  { drawCard } from "./deck";
 
-export class Player {
-  id: number
-  name: string
-  hand: Hand
-  score : number
+import type { Card } from "./UnoCard";
 
-  constructor(id: number, name: string) {
-    this.id = id
-    this.name = name
-    this.score = 0
-    this.hand = new Hand(createEmptyDeck().cards)
+export type Player = {
+  id: number;
+  name: string;
+  hand: Card[];
+  score: number;
+};
+
+export const createPlayer = (id: number, name: string): Player => ({
+  id,
+  name,
+  hand: [],
+  score: 0,
+});
+
+export const resetHand = (player: Player): Player => ({ ...player, hand: [] });
+
+export const drawCards = (player: Player, deck: Deck, count = 1): [Player, Deck] => {
+  let newHand = [...player.hand];
+  let newDeck = { ...deck };
+
+  for (let i = 0; i < count; i++) {
+    const [card, nextDeck] = drawCard(newDeck);
+    newDeck = nextDeck;
+    if (card) newHand = [...newHand, card];
   }
 
-  resetHand(): void {
-    this.hand = new Hand(createEmptyDeck().cards)
-  }
+  return [{ ...player, hand: newHand }, newDeck];
+};
 
-  draw(drawPile: DrawPile, count: number = 1): void {
-    for (let i = 0; i < count; i++) {
-      const card = drawPile.deal()
-      if (card) {
-        this.hand.add(card)
-      }
-    }
-  }
-}
+export const playCard = (player: Player, card: Card): Player => ({
+  ...player,
+  hand: player.hand.filter(c => c !== card),
+});
