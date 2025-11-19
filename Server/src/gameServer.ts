@@ -11,7 +11,7 @@ import { PubSub } from "graphql-subscriptions";
 import { readFile } from "fs/promises";
 
 import { MemoryStore } from "./memorystore";
-import { ServerModel } from "./serverModel";
+import { ServerModel } from "./serverModel.fp";
 import { create_api } from "./api";
 import { create_resolvers } from "./resolvers";
 

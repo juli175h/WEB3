@@ -1,29 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   fetchPendingGames,
   createPendingGame,
   joinPendingGame,
+  addOrUpdateGame,
+  removeGame,
 } from '../store/pendingGamesSlice';
+import { pending$ } from '../services/api';
+import { setPlayer } from '../store/playerSlice';
 import { games as fetchActiveGames, onActive } from '../services/api';
 import type { IndexedUno, PendingUno } from '../services/game';
 //import './Lobby.css';
 
-const Lobby: React.FC = () => {
+const Lobby = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   // Get player name from Redux
   const playerNameFromStore = useAppSelector((state) => state.player.player);
-  const [playerName, setPlayerName] = useState(playerNameFromStore || '');
-  const [maxPlayers, setMaxPlayers] = useState(2);
-  const [activeGames, setActiveGames] = useState<IndexedUno[]>([]);
+  const [playerName, setPlayerName] = React.useState(playerNameFromStore || '');
+  const [maxPlayers, setMaxPlayers] = React.useState(2);
+  const [activeGames, setActiveGames] = React.useState([] as IndexedUno[]);
 
   const pendingState = useAppSelector((state) => state.pendingGames);
 
   // Load pending + active games on mount
-  useEffect(() => {
+  React.useEffect(() => {
     // Fetch pending games from Redux slice
     dispatch(fetchPendingGames());
 
@@ -48,7 +52,17 @@ const Lobby: React.FC = () => {
       }
     });
 
-    // No cleanup needed if onActive does not return an unsubscribe
+    // Subscribe to pending lobby updates and update Redux accordingly
+    const pSub = pending$.subscribe((g) => {
+      if (g.pending) {
+        dispatch(addOrUpdateGame(g));
+      } else {
+        dispatch(removeGame(g.id));
+      }
+    });
+
+    // Cleanup pending subscription on unmount
+    return () => pSub.unsubscribe();
   }, [dispatch]);
 
   // Utility to display players
@@ -61,6 +75,9 @@ const Lobby: React.FC = () => {
   const handleCreateGame = async () => {
     if (!playerName.trim()) return alert('Enter your name!');
     try {
+      // remember player name in global store so Pending page guard passes
+      dispatch(setPlayer(playerName));
+
       const game = await dispatch(
         createPendingGame({ name: playerName, maxPlayers })
       ).unwrap();
@@ -75,6 +92,9 @@ const Lobby: React.FC = () => {
   const handleJoinGame = async (id: string) => {
     if (!playerName.trim()) return alert('Enter your name!');
     try {
+      // persist player name to global store before navigating to pending
+      dispatch(setPlayer(playerName));
+
       const joined = await dispatch(joinPendingGame({ id, name: playerName })).unwrap();
       navigate(joined.pending ? `/pending/${joined.id}` : `/game/${joined.id}`);
     } catch (err) {
@@ -86,6 +106,7 @@ const Lobby: React.FC = () => {
   // Join an active game
   const handleJoinActiveGame = (id: string) => {
     if (!playerName.trim()) return alert('Enter your name first');
+    dispatch(setPlayer(playerName));
     navigate(`/game/${id}`);
   };
 
@@ -99,14 +120,14 @@ const Lobby: React.FC = () => {
           <label>Your Name:</label>
           <input
             value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
+            onChange={(e: any) => setPlayerName(e.target.value)}
             placeholder="Enter your name"
           />
         </div>
 
         <div>
           <label>Number of Players (2–4):</label>
-          <select value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
+          <select value={maxPlayers} onChange={(e: any) => setMaxPlayers(Number(e.target.value))}>
             {[2, 3, 4].map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -123,7 +144,7 @@ const Lobby: React.FC = () => {
         <h3>Active Games</h3>
         {activeGames.length ? (
           <ul>
-            {activeGames.map((g) => (
+            {activeGames.map((g: any) => (
               <li key={g.id}>
                 Game #{g.id} — Players: {playerNames(g)}
             <button onClick={() => handleJoinActiveGame(g.id)}>Join</button>
@@ -142,7 +163,7 @@ const Lobby: React.FC = () => {
         {pendingState.error && <p>⚠️ Server error.</p>}
         {!pendingState.loading && !pendingState.error && pendingState.pendingGames.length > 0 && (
           <ul>
-            {pendingState.pendingGames.map((g) => (
+            {pendingState.pendingGames.map((g: any) => (
               <li key={g.id}>
                 Game #{g.id} ({g.players?.length || 0}/{g.number_of_players} players)
                 <button onClick={() => handleJoinGame(g.id)}>Join</button>

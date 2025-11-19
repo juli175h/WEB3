@@ -1,6 +1,6 @@
 import { PubSub } from "graphql-subscriptions";
 import { API, toGraphQLMatch } from "./api";
-import { IndexedUnoMatch, PendingGame } from "./serverModel";
+import { IndexedUnoMatch, PendingGame } from "./serverModel.fp";
 import {Color} from "../../Domain/src/model/UnoCard";
 
 /** Convert a game to GraphQL type */

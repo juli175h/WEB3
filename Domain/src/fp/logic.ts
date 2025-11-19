@@ -1,13 +1,13 @@
 import type { Card, Color } from "../model/UnoCard";
-import { createInitialDeck, shuffle, deal } from "./deck";
+import { createInitialDeck, shuffle, deal, RNG } from "./deck";
 import type { GameState, PlayerState, RoundState } from "./types";
 import { currentRound, withRound } from "./types";
 
 const WINNING_SCORE = 500;
 
-export function newGame(playerNames: string[]): GameState {
+export function newGame(playerNames: string[], rng?: RNG): GameState {
   const players: PlayerState[] = playerNames.map((n, i) => ({ id: i, name: n, score: 0, hand: [] }));
-  const deck = shuffle(createInitialDeck());
+  const deck = rng ? shuffle(createInitialDeck(), rng) : createInitialDeck();
   const [afterDeal, dealtPlayers] = dealInitialHands(players, deck);
   const [discardTop, drawPile] = dealFirstCard(afterDeal);
   const round: RoundState = {
@@ -37,8 +37,8 @@ function dealFirstCard(deck: Card[]): [Card | undefined, Card[]] {
   if (idx >= 0) {
     const copy = deck.slice();
     const [wild] = copy.splice(idx, 1);
-    (wild as any).color = undefined;
-    return [wild, copy];
+    const wildCopy = { ...(wild as any), color: undefined } as Card;
+    return [wildCopy, copy];
   }
   const copy = deck.slice();
   const first = copy.shift();
@@ -158,7 +158,7 @@ export function isRoundOver(g: GameState): boolean {
   return g.players.some(p => p.hand.length === 0);
 }
 
-export function finishRound(g: GameState): GameState {
+export function finishRound(g: GameState, rng?: RNG): GameState {
   const winner = g.players.find(p => p.hand.length === 0);
   if (!winner) return g;
   const points = g.players.reduce((sum, p) => (p === winner ? sum : sum + handPoints(p.hand)), 0);
@@ -167,8 +167,8 @@ export function finishRound(g: GameState): GameState {
     const w = players.reduce((a, b) => (a.score >= b.score ? a : b));
     return { ...g, players, finished: true, winner: { id: w.id, name: w.name, score: w.score } };
   }
-  // start new round
-  const deck = shuffle(createInitialDeck());
+  // start new round; use provided rng to shuffle or leave deterministic
+  const deck = rng ? shuffle(createInitialDeck(), rng) : createInitialDeck();
   const [afterDeal, dealtPlayers] = dealInitialHands(players, deck);
   const [discardTop, drawPile] = dealFirstCard(afterDeal);
   const newRound: RoundState = {

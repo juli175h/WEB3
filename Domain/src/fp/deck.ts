@@ -1,5 +1,6 @@
-import { standardShuffler } from "../utils/random_utils";
 import type { Card, NumberedCard, ReverseCard, SkipCard, DrawTwoCard, WildCard, WildDrawCard, Color } from "../model/UnoCard";
+
+export type RNG = (bound: number) => number;
 
 export const colors: Color[] = ["RED", "BLUE", "GREEN", "YELLOW"];
 
@@ -27,10 +28,16 @@ export function createInitialDeck(): Card[] {
   return cards;
 }
 
-export function shuffle(cards: Card[]): Card[] {
-  const copy = cards.slice();
-  standardShuffler(copy);
-  return copy;
+export function shuffle(cards: Card[], rng: RNG): Card[] {
+  // Pure Fisher-Yates shuffle that uses an injected RNG function
+  const out = cards.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng(i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
 }
 
 export function deal<T>(arr: T[], count: number): [T[], T[]] {

@@ -1,4 +1,4 @@
-import { IndexedUnoMatch, PendingGame, GameStore } from "./serverModel";
+import { IndexedUnoMatch, PendingGame, GameStore } from "./serverModel.fp";
 
 export class MemoryStore implements GameStore {
   private _games: IndexedUnoMatch[] = [];

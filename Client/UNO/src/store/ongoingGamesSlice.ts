@@ -1,10 +1,10 @@
 import { createSlice} from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { Card } from "Domain/src/model/UnoCard";
-import type { Player } from "Domain/src/model/Player";
-import type { UnoMatch } from "Domain/src/model/UnoMatch";
-import { createMatch as createDomainMatch, currentRound, finishRound as finishRoundMatch } from "Domain/src/model/UnoMatch";
-import { playCard as playCardRound, drawCard as drawCardRound } from "Domain/src/model/UnoRound";
+import type { Card } from "../../../../Domain/src/model/UnoCard";
+import type { Player } from "../../../../Domain/src/model/Player";
+import type { UnoMatch } from "../../../../Domain/src/model/UnoMatch";
+import { createMatch as createDomainMatch, currentRound, finishRound as finishRoundMatch } from "../../../../Domain/src/model/UnoMatch";
+import { playCard as playCardRound, drawCard as drawCardRound } from "../../../../Domain/src/model/UnoRound";
 
 interface OngoingGame {
   id: string;

@@ -15,6 +15,7 @@ import {
   type IndexedUno,
   type PendingUno,
 } from "./game";
+import { Subject } from "rxjs";
 
 /* ---------------- Apollo setup ---------------- */
 
@@ -53,6 +54,11 @@ async function mutate<T>(mutation: DocumentNode, variables?: any): Promise<T> {
 }
 
 /* ---------------- Subscriptions ---------------- */
+// RxJS subjects so other parts of the app can consume server events as streams
+const activeSubject = new Subject<IndexedUno>();
+const pendingSubject = new Subject<PendingUno>();
+export const active$ = activeSubject.asObservable();
+export const pending$ = pendingSubject.asObservable();
 
 interface ActiveSubscriptionResult {
   active?: any;
@@ -93,7 +99,13 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
   obs.subscribe({
     next(payload) {
       const data = payload.data;
-      if (data?.active) subscriber(from_graphql_game(data.active));
+      if (data?.active) {
+        const mapped = from_graphql_game(data.active);
+        // publish to rxjs subject
+        activeSubject.next(mapped);
+        // also call legacy callback
+        subscriber(mapped);
+      }
     },
     error(err) {
       console.error("❌ Active subscription error:", err);
@@ -114,12 +126,14 @@ export function onPending(subscriber: (g: PendingUno) => any) {
       }
     }
   `;
-
   const obs = apollo.subscribe<PendingSubscriptionResult>({ query: q });
   const subscription = obs.subscribe({
     next(payload) {
       const data = payload.data;
-      if (data?.pending) subscriber(data.pending);
+      if (data?.pending) {
+        pendingSubject.next(data.pending);
+        subscriber(data.pending);
+      }
     },
     error(err) {
       console.error("❌ Pending subscription error:", err);
@@ -127,6 +141,15 @@ export function onPending(subscriber: (g: PendingUno) => any) {
   });
 
   return subscription; // returns the object with unsubscribe
+}
+
+// Ensure we start the pending subscription once so the pending$ Subject is fed
+// This keeps a single background subscription active for the lifetime of the app.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  onPending(() => {});
+} catch (err) {
+  console.warn('Could not start pending subscription at module init:', err);
 }
 
 

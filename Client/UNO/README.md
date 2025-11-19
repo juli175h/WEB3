@@ -1,14 +1,14 @@
 # UNO
 
-This template should help get you started developing with Vue 3 in Vite.
+This template has been converted to use React with Vite.
 
 ## Recommended IDE Setup
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Use VSCode with the built-in TypeScript support or the [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) and React extensions.
 
 ## Type Support for `.vue` Imports in TS
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+This project uses React + TypeScript. The repo runs `tsc` to type-check the React code (see `package.json` scripts).
 
 ## Customize configuration
 

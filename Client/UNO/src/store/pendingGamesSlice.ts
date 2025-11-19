@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { PendingUno } from "../services/game";
-import { new_game, join, pending_games, onPending } from "../services/api";
+import type { PendingUno, IndexedUno } from "../services/game";
+import { new_game, join, pending_games, onPending, pending$ } from "../services/api";
 import type { RootState } from "./store";
 
 /* ---------------- Async Thunks ---------------- */
@@ -29,15 +29,13 @@ export const createPendingGame = createAsyncThunk<PendingUno, { name: string; ma
 );
 
 // Join an existing pending game
-export const joinPendingGame = createAsyncThunk<PendingUno, { id: string; name: string }>(
+export const joinPendingGame = createAsyncThunk<PendingUno | IndexedUno, { id: string; name: string }>(
   "pendingGames/joinPendingGame",
   async ({ id, name }) => {
     const res = await join({ id } as PendingUno, name);
 
-    // Only allow PendingUno
-    if ("creator" in res) return res as PendingUno;
-
-    throw new Error("Game became active immediately; not a pending game");
+    // return whatever the server gives us (Pending or Active)
+    return res as PendingUno | IndexedUno;
   }
 );
 
@@ -103,13 +101,23 @@ export const pendingGamesSlice = createSlice({
         state.loading = true;
         state.error = false;
       })
-      .addCase(joinPendingGame.fulfilled, (state, action: PayloadAction<PendingUno>) => {
+      .addCase(joinPendingGame.fulfilled, (state, action: PayloadAction<PendingUno | IndexedUno>) => {
         state.loading = false;
-        const idx = state.pendingGames.findIndex((g) => g.id === action.payload.id);
-        if (idx !== -1) {
-          state.pendingGames[idx] = action.payload;
+        const payload = action.payload as PendingUno | IndexedUno;
+
+        // If server returned a PendingGame, update or add it in the list
+        if ((payload as PendingUno).creator !== undefined) {
+          const p = payload as PendingUno;
+          const idx = state.pendingGames.findIndex((g) => g.id === p.id);
+          if (idx !== -1) {
+            state.pendingGames[idx] = p;
+          } else {
+            state.pendingGames.push(p);
+          }
         } else {
-          state.pendingGames.push(action.payload);
+          // Server returned an ActiveMatch — remove any matching pending lobby
+          const id = (payload as IndexedUno).id;
+          state.pendingGames = state.pendingGames.filter((g) => g.id !== id);
         }
       })
       .addCase(joinPendingGame.rejected, (state) => {
@@ -135,12 +143,10 @@ export const selectGameById = (state: RootState, id: string): PendingUno | undef
 
 // Subscribe to pending updates (calls callback when game becomes active)
 export const subscribeToUpdates = (callback: (id: string) => void) => {
-  // onPending returns an object with an unsubscribe method, not a promise
-  const subscription = onPending((game: PendingUno) => {
+  // Use RxJS stream to listen for pending updates and trigger callback when lobby becomes active
+  const sub = pending$.subscribe((game: PendingUno) => {
     if (!game.pending) callback(game.id);
   });
-
-  // Return the unsubscribe function for cleanup
-  return () => subscription?.unsubscribe?.();
+  return () => sub.unsubscribe();
 };
 

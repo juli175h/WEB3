@@ -1,6 +1,6 @@
 import { PubSub } from "graphql-subscriptions";
 import type { Color } from "../../Domain/src/model/UnoCard";
-import { ServerModel, IndexedUnoMatch, PendingGame } from "./serverModel";
+import { ServerModel, IndexedUnoMatch, PendingGame } from "./serverModel.fp";
 
 export interface API {
   new_game(creator: string, number_of_players: number): Promise<IndexedUnoMatch | PendingGame>;
@@ -127,7 +127,8 @@ export function toGraphQLMatch(match: IndexedUnoMatch) {
           id: match.winner.id,
           name: match.winner.name,
           score: match.winner.score,
-          handCount: match.winner.hand?.length ?? 0,
+          // FP wrapper stores full players; find the player's hand length from players array
+          handCount: match.players.find((pp) => pp.id === match.winner!.id)?.hand?.length ?? 0,
         }
       : null,
     // make player id unique per match to avoid client-side cache/entity collisions
