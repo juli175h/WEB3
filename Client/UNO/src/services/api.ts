@@ -7,6 +7,8 @@ import {
   type DocumentNode,
 } from "@apollo/client/core";
 import { getMainDefinition } from "@apollo/client/utilities";
+// graphql-ws and the GraphQLWsLink are browser-only (use WebSocket). For SSR we must avoid creating
+// a WS link during module init. We create the ws link conditionally below.
 import { GraphQLWsLink } from "@apollo/client/link/subscriptions";
 import { createClient } from "graphql-ws";
 
@@ -19,25 +21,29 @@ import { Subject } from "rxjs";
 
 /* ---------------- Apollo setup ---------------- */
 
-const wsLink = new GraphQLWsLink(
-  createClient({ url: "ws://localhost:4000/graphql" })
-);
+const isBrowser = typeof window !== "undefined";
 
 const httpLink = new HttpLink({ uri: "http://localhost:4000/graphql" });
 
-const splitLink = split(
-  ({ query }) => {
-    const def = getMainDefinition(query);
-    return def.kind === "OperationDefinition" && def.operation === "subscription";
-  },
-  wsLink,
-  httpLink
-);
+let apollo: ApolloClient;
 
-const apollo = new ApolloClient({
-  link: splitLink,
-  cache: new InMemoryCache(),
-});
+if (isBrowser) {
+  const wsLink = new GraphQLWsLink(createClient({ url: "ws://localhost:4000/graphql" }));
+
+  const splitLink = split(
+    ({ query }) => {
+      const def = getMainDefinition(query);
+      return def.kind === "OperationDefinition" && def.operation === "subscription";
+    },
+    wsLink,
+    httpLink
+  );
+
+  apollo = new ApolloClient({ link: splitLink, cache: new InMemoryCache() });
+} else {
+  // SSR: don't create WS link — use plain HTTP client. Subscriptions are no-ops on server.
+  apollo = new ApolloClient({ link: httpLink, cache: new InMemoryCache() });
+}
 
 /* ---------------- Helpers ---------------- */
 
@@ -95,9 +101,14 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
     }
   `;
 
+  if (!isBrowser) {
+    // SSR: subscriptions are not available — return early and do nothing.
+    return;
+  }
+
   const obs = apollo.subscribe<ActiveSubscriptionResult>({ query: q });
   obs.subscribe({
-    next(payload) {
+    next(payload: any) {
       const data = payload.data;
       if (data?.active) {
         const mapped = from_graphql_game(data.active);
@@ -107,7 +118,7 @@ export async function onActive(subscriber: (g: IndexedUno) => any) {
         subscriber(mapped);
       }
     },
-    error(err) {
+    error(err: any) {
       console.error("❌ Active subscription error:", err);
     },
   });
@@ -126,16 +137,21 @@ export function onPending(subscriber: (g: PendingUno) => any) {
       }
     }
   `;
+  if (!isBrowser) {
+    // SSR: return a noop subscription object so callers can safely call unsubscribe.
+    return { unsubscribe: () => {} } as any;
+  }
+
   const obs = apollo.subscribe<PendingSubscriptionResult>({ query: q });
   const subscription = obs.subscribe({
-    next(payload) {
+    next(payload: any) {
       const data = payload.data;
       if (data?.pending) {
         pendingSubject.next(data.pending);
         subscriber(data.pending);
       }
     },
-    error(err) {
+    error(err: any) {
       console.error("❌ Pending subscription error:", err);
     },
   });
@@ -406,6 +422,10 @@ export async function join(game: PendingUno, player: string): Promise<IndexedUno
     currentRound: g.currentRound,
   });
 }
+
+// NOTE: Do NOT start subscriptions at module init when running under SSR —
+// the server environment may lack WebSocket support. Start subscriptions from
+// the client entry (e.g. `main.tsx`) where `window` is defined.
 
 
 /* --- Draw --- */

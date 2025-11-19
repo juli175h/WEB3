@@ -9,6 +9,8 @@ import { makeExecutableSchema } from "@graphql-tools/schema";
 import { useServer } from "graphql-ws/use/ws";
 import { PubSub } from "graphql-subscriptions";
 import { readFile } from "fs/promises";
+import path from "path";
+import { pathToFileURL } from "url";
 
 import { MemoryStore } from "./memorystore";
 import { ServerModel } from "./serverModel.fp";
@@ -55,6 +57,29 @@ async function start() {
 
     await server.start();
     app.use("/graphql", expressMiddleware(server, { context: async () => ({ pubsub, api }) }));
+
+        // Serve built client assets (assumes Client/UNO built to dist)
+        const clientDist = path.resolve(process.cwd(), "Client", "UNO", "dist");
+        app.use(express.static(clientDist));
+
+        // SSR handler — load server bundle produced by Vite SSR build
+        app.get("*", async (req, res) => {
+            try {
+                const indexHtml = await readFile(path.join(clientDist, "index.html"), "utf8");
+                // server bundle path (Vite outputs SSR build to dist/server)
+                const serverEntry = path.join(clientDist, "server", "entry-server.js");
+            const mod = await import(pathToFileURL(serverEntry).toString());
+                const { render } = mod;
+                const { html, state } = await render(req.originalUrl);
+
+                const safeState = JSON.stringify(state).replace(/</g, "\\u003c");
+                const result = indexHtml.replace('<div id="root"></div>', `<div id="root">${html}</div><script>window.__INITIAL_STATE__=${safeState}</script>`);
+                res.status(200).set({ "Content-Type": "text/html" }).send(result);
+            } catch (err) {
+                console.error('SSR render failed:', err);
+                res.status(500).send('SSR error');
+            }
+        });
 
     const PORT = 4000;
     httpServer.listen(PORT, () => {

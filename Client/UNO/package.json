@@ -8,10 +8,11 @@
   },
   "scripts": {
     "dev": "vite",
-  "build": "run-p type-check \"build-only {@}\" --",
+  "build:client": "vite build",
+  "build:ssr": "vite build --ssr src/entry-server.tsx",
+  "build": "npm run type-check && npm run build:client && npm run build:ssr",
     "preview": "vite preview",
-    "build-only": "vite build",
-  "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@apollo/client": "^4.0.7",
