@@ -32,16 +32,21 @@ function dealInitialHands(players: PlayerState[], deck: Card[]): [Card[], Player
 }
 
 function dealFirstCard(deck: Card[]): [Card | undefined, Card[]] {
-  // For parity with the current codebase: allow wild as first, leave color unset
-  const idx = deck.findIndex(c => c.type === "WILD" || c.type === "WILD DRAW");
-  if (idx >= 0) {
-    const copy = deck.slice();
-    const [wild] = copy.splice(idx, 1);
-    const wildCopy = { ...(wild as any), color: undefined } as Card;
+  // Prefer a non-wild card as the starting discard. If none exists, fall back
+  // to the first card (and if that card is a wild, leave its color unset).
+  const copy = deck.slice();
+  const nonWildIdx = copy.findIndex(c => c.type !== "WILD" && c.type !== "WILD DRAW");
+  if (nonWildIdx >= 0) {
+    const [card] = copy.splice(nonWildIdx, 1);
+    return [card, copy];
+  }
+
+  // No non-wild found — fallback to first card. If it's a wild, unset color.
+  const first = copy.shift();
+  if (first && (first.type === "WILD" || first.type === "WILD DRAW")) {
+    const wildCopy = { ...(first as any), color: undefined } as Card;
     return [wildCopy, copy];
   }
-  const copy = deck.slice();
-  const first = copy.shift();
   return [first, copy];
 }
 
@@ -128,7 +133,9 @@ function applyEffect(g: GameState, card: Card): GameState {
       const players = g.players.slice();
       players[target] = { ...players[target], hand: players[target].hand.concat(two) };
       g = { ...g, players };
-      r2 = { ...r, drawPile: rest };
+      // set currentPlayerIndex to the target so the normal turn-advance
+      // performed after play will skip the target player
+      r2 = { ...r, drawPile: rest, currentPlayerIndex: target };
       break;
     }
     case "WILD DRAW": {
@@ -137,7 +144,9 @@ function applyEffect(g: GameState, card: Card): GameState {
       const players = g.players.slice();
       players[target] = { ...players[target], hand: players[target].hand.concat(four) };
       g = { ...g, players };
-      r2 = { ...r, drawPile: rest };
+      // set currentPlayerIndex to the target so the normal turn-advance
+      // performed after play will skip the target player
+      r2 = { ...r, drawPile: rest, currentPlayerIndex: target };
       break;
     }
     case "WILD":

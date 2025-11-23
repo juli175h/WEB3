@@ -4,12 +4,11 @@ import '../styles/Card.css'
 
 type CardProps = {
   card: UnoCard;
-  clickable?: boolean;
   className?: string;   
   onClick?: () => void;
 };
 
-export const Card: React.FC<CardProps> = ({ card, clickable, className, onClick }) => {
+export const Card: React.FC<CardProps> = ({ card, className, onClick }) => {
   const getCardImage = (): string => {
     // Map type and color to file name
     if (card.type === "WILD") return `/assets/Cards/uno_card-wildchange.png`;
@@ -25,10 +24,15 @@ export const Card: React.FC<CardProps> = ({ card, clickable, className, onClick 
     return "";
   };
 
+  const isClickable = typeof onClick === 'function';
+
   return (
-   <div
-      className={`uno-card ${clickable ? "clickable" : ""} ${className || ""}`}
-      onClick={clickable ? onClick : undefined}
+    <div
+      className={`uno-card ${isClickable ? 'clickable' : ''} ${className || ''}`}
+      onClick={isClickable ? onClick : undefined}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { onClick && onClick(); } } : undefined}
     >
       <img src={getCardImage()} alt={`${card.color} ${card.type}`} />
     </div>

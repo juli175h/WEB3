@@ -10,3 +10,27 @@
   transform: scale(1.08);
   cursor: pointer;
 }
+
+.uno-card {
+  display: inline-block;
+}
+
+.uno-card.disabled {
+  opacity: 0.5;
+  filter: grayscale(40%);
+  pointer-events: none;
+}
+
+.cards {
+  display: flex;
+  flex-direction: row;
+  gap: 0.4rem;
+  align-items: flex-end;
+  padding: 0.5rem 0;
+  overflow-x: auto;
+}
+
+.cards .uno-card img {
+  width: 92px;
+  height: 138px;
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import * as React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {Card} from '../components/Card'
 import { useAppSelector } from '../store/hooks'
@@ -19,23 +19,34 @@ const Game: React.FC = () => {
   const navigate = useNavigate()
   const user = useAppSelector((state) => state.player.player)
 
-  const [active, setActive] = useState<IndexedUno | undefined>()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [hand, setHand] = useState<UnoCard[]>([])
-  const [err, setErr] = useState('')
-  const [lastDiscard, setLastDiscard] = useState<UnoCard | null>(null)
+  const [active, setActive] = React.useState(undefined as IndexedUno | undefined)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState(null as string | null)
+  const [hand, setHand] = React.useState([] as UnoCard[])
+  const [err, setErr] = React.useState('')
+  const [lastDiscard, setLastDiscard] = React.useState(null as UnoCard | null)
 
-  const [showColorPicker, setShowColorPicker] = useState(false)
-  const [pendingWildIndex, setPendingWildIndex] = useState<number | null>(null)
+  const [showColorPicker, setShowColorPicker] = React.useState(false)
+  const [pendingWildIndex, setPendingWildIndex] = React.useState(null as number | null)
 
-  const [showDrawModal, setShowDrawModal] = useState(false)
-  const [drawnCard, setDrawnCard] = useState<UnoCard | null>(null)
-  const [drawnIndex, setDrawnIndex] = useState<number | null>(null)
-  const [drawnPlayable, setDrawnPlayable] = useState(false)
+  const [showDrawModal, setShowDrawModal] = React.useState(false)
+  const [drawnCard, setDrawnCard] = React.useState(null as UnoCard | null)
+  const [drawnIndex, setDrawnIndex] = React.useState(null as number | null)
+  const [drawnPlayable, setDrawnPlayable] = React.useState(false)
+
+  // Prevent background scrolling and interactions while any modal is open
+  React.useEffect(() => {
+    const open = showColorPicker || showDrawModal || !!active?.finished;
+    if (open) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => { document.body.classList.remove('modal-open'); };
+  }, [showColorPicker, showDrawModal, active]);
 
   // Fetch game and subscribe to updates
-  useEffect(() => {
+  React.useEffect(() => {
     if (!user) {
       navigate('/')
       setLoading(false)
@@ -47,7 +58,7 @@ const Game: React.FC = () => {
         const g = await fetchGame(String(id))
         setActive(g)
         if (g) await loadHand(g)
-        await onActive(async (update) => {
+        await onActive(async (update: IndexedUno) => {
           if (String(update.id) === id) {
             setActive(update)
             await loadHand(update)
@@ -74,8 +85,8 @@ const Game: React.FC = () => {
   const discardTop = round?.discardTop
   const isYourTurn = user && currentPlayer?.name === user
 
-  const myScore = useMemo(() => {
-    const me = players.find((p) => p.name === user)
+  const myScore = React.useMemo(() => {
+    const me = players.find((p: any) => p.name === user)
     return me?.score ?? 0
   }, [players, user])
 
@@ -85,6 +96,18 @@ const Game: React.FC = () => {
   const cardToShow = discardTop ?? lastDiscard
 
   const clearErrSoon = () => setTimeout(() => setErr(''), 1500)
+
+  // Track the server round index and clear transient `lastDiscard` only when
+  // the server advances to a new round. This preserves immediate play feedback
+  // while preventing the played card from appearing as the next round's discard.
+  const prevRoundIndexRef = (React as any).useRef(null) as { current: number | null }
+  React.useEffect(() => {
+    const newIdx = active?.currentRound?.roundIndex ?? null
+    if (prevRoundIndexRef.current !== null && newIdx !== prevRoundIndexRef.current) {
+      setLastDiscard(null)
+    }
+    prevRoundIndexRef.current = newIdx
+  }, [active?.currentRound?.roundIndex])
 
   const openColorPickerFor = (index: number) => {
     setPendingWildIndex(index)
@@ -96,11 +119,14 @@ const Game: React.FC = () => {
     const idx = pendingWildIndex
     const played = hand[idx]
     try {
+      // show the played card immediately while we wait for the server update
+      setLastDiscard(played)
       const updated = await playCardByIndex(String(active.id), user, idx, color)
       setActive(updated)
       await loadHand(updated)
-      setLastDiscard(updated.currentRound?.discardTop ? null : played)
     } catch (e: any) {
+      // revert transient state on failure
+      setLastDiscard(null)
       setErr(e?.message ?? 'Illegal move')
       clearErrSoon()
     } finally {
@@ -110,25 +136,43 @@ const Game: React.FC = () => {
   }
 
   const onPlay = async (idx: number) => {
-    if (!active || !user || !isYourTurn) return
+    if (!active || !user || !isYourTurn || isFinished) return
     const card = hand[idx]
     if (card.type === 'WILD' || card.type === 'WILD DRAW') {
       openColorPickerFor(idx)
       return
     }
     try {
+      // show the played card immediately while we wait for the server update
+      setLastDiscard(card)
       const updated = await playCardByIndex(String(active.id), user, idx)
       setActive(updated)
       await loadHand(updated)
-      setLastDiscard(updated.currentRound?.discardTop ? null : card)
     } catch (e: any) {
+      // revert transient state on failure
+      setLastDiscard(null)
       setErr(e?.message ?? 'Illegal move')
       clearErrSoon()
     }
   }
 
+  // Local helper to determine playability of a card against the current discard top
+  const cardIsPlayable = (card: UnoCard, top?: UnoCard | null) => {
+    if (!top) return true
+    if ((top.type === 'WILD' || top.type === 'WILD DRAW') && !top.color) return true
+    if (card.type === 'WILD' || card.type === 'WILD DRAW') return true
+    if (card.type === top.type) {
+      if (card.type === 'NUMBERED' && top.type === 'NUMBERED') {
+        return card.color === top.color || card.value === top.value
+      }
+      return true
+    }
+    if ('color' in card && 'color' in top && card.color && top.color && card.color === top.color) return true
+    return false
+  }
+
   const onDraw = async () => {
-    if (!active || !user || !isYourTurn) return
+    if (!active || !user || !isYourTurn || isFinished) return
     try {
       const before = [...hand]
       const updatedGame = await apiDraw(String(active.id), user)
@@ -148,13 +192,7 @@ const Game: React.FC = () => {
 
       if (drawn) {
         const top = discardTop ?? lastDiscard
-        const isPlayable =
-          !top ||
-          drawn.type === 'WILD' ||
-          drawn.type === 'WILD DRAW' ||
-          drawn.color === top.color ||
-          drawn.type === top.type ||
-          drawn.value === top.value
+        const isPlayable = cardIsPlayable(drawn, top)
         setDrawnCard(drawn)
         setDrawnIndex(updatedHand.indexOf(drawn))
         setDrawnPlayable(isPlayable)
@@ -167,7 +205,7 @@ const Game: React.FC = () => {
   }
 
   const playDrawnCard = async () => {
-    if (!active || !user || drawnIndex == null || !drawnCard) return
+    if (!active || !user || drawnIndex == null || !drawnCard || isFinished) return
     if (drawnCard.type === 'WILD' || drawnCard.type === 'WILD DRAW') {
       setPendingWildIndex(drawnIndex)
       setShowColorPicker(true)
@@ -175,11 +213,14 @@ const Game: React.FC = () => {
       return
     }
     try {
+      // show the played drawn card immediately while we wait for the server update
+      setLastDiscard(drawnCard)
       const updated = await playCardByIndex(String(active.id), user, drawnIndex)
       setActive(updated)
       await loadHand(updated)
-      setLastDiscard(updated.currentRound?.discardTop ? null : drawnCard)
     } catch (e: any) {
+      // revert transient state on failure
+      setLastDiscard(null)
       setErr(e?.message ?? 'Illegal move')
       clearErrSoon()
     } finally {
@@ -191,7 +232,7 @@ const Game: React.FC = () => {
   }
 
   const skipDrawnCard = async () => {
-    if (!active || !user) return
+    if (!active || !user || isFinished) return
     try {
       await skipTurn(String(active.id), user)
     } catch (e: any) {
@@ -217,7 +258,7 @@ const Game: React.FC = () => {
       <section className="players">
         <h3>Players</h3>
         <ul>
-          {players.map((p) => (
+            {players.map((p: any) => (
             <li
               key={p.id}
               className={[
@@ -262,14 +303,18 @@ const Game: React.FC = () => {
         <section className="hand">
           <h3>{user}'s hand (score: {myScore})</h3>
           <div className="cards">
-            {hand.map((c, idx) => (
-              <Card
-                key={idx + '-' + (c.color || 'WILD') + '-' + c.type + '-' + c.value}
-                card={c}
-                className={!isYourTurn ? 'disabled' : ''}
-                onClick={() => onPlay(idx)}
-              />
-            ))}
+            {hand.map((c: UnoCard, idx: number) => {
+              const playable = cardIsPlayable(c, discardTop)
+              const canClick = isYourTurn && playable && !isFinished
+              return (
+                <Card
+                  key={idx + '-' + (c.color || 'WILD') + '-' + c.type + '-' + c.value}
+                  card={c}
+                  className={!canClick ? 'disabled' : ''}
+                  onClick={canClick ? () => onPlay(idx) : undefined}
+                />
+              )
+            })}
           </div>
         </section>
       )}

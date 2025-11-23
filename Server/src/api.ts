@@ -113,6 +113,7 @@ export function toGraphQLMatch(match: IndexedUnoMatch) {
     ? {
         currentPlayerIndex: round.currentPlayerIndex ?? 0,
         direction: round.playDirection ?? 1,
+        roundIndex: round.roundIndex ?? 0,
         discardTop: round.discardPile?.top?.() ?? null,
         drawPileCount: round.drawPile?.size ?? 0,
       }

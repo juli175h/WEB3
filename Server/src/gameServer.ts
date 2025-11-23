@@ -11,6 +11,7 @@ import { PubSub } from "graphql-subscriptions";
 import { readFile } from "fs/promises";
 import path from "path";
 import { pathToFileURL } from "url";
+import fs from "fs";
 
 import { MemoryStore } from "./memorystore";
 import { ServerModel } from "./serverModel.fp";
@@ -58,9 +59,28 @@ async function start() {
     await server.start();
     app.use("/graphql", expressMiddleware(server, { context: async () => ({ pubsub, api }) }));
 
+        // Resolve repository root robustly (works whether server is started from repo root or Server/)
+        const cwd = process.cwd();
+        let repoRoot = cwd;
+
+        // If running with cwd at Server/, repo root is parent
+        if (path.basename(cwd) === 'Server') {
+            repoRoot = path.resolve(cwd, '..');
+        }
+
+        // If still not containing Client/UNO, try parent
+        if (!fs.existsSync(path.join(repoRoot, 'Client', 'UNO'))) {
+            const parent = path.resolve(repoRoot, '..');
+            if (fs.existsSync(path.join(parent, 'Client', 'UNO'))) repoRoot = parent;
+        }
+
         // Serve built client assets (assumes Client/UNO built to dist)
-        const clientDist = path.resolve(process.cwd(), "Client", "UNO", "dist");
+        const clientDist = path.join(repoRoot, 'Client', 'UNO', 'dist');
         app.use(express.static(clientDist));
+
+        // Serve card images moved into the Server repo under src/Cards
+        const cardsDir = path.join(repoRoot, 'Server', 'src', 'Cards');
+        app.use('/assets/Cards', express.static(cardsDir));
 
         // SSR handler — load server bundle produced by Vite SSR build
         app.get("*", async (req, res) => {

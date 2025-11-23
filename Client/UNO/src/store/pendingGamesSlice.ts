@@ -137,7 +137,7 @@ export default pendingGamesSlice.reducer;
 
 // Get a specific pending game by id
 export const selectGameById = (state: RootState, id: string): PendingUno | undefined =>
-  state.pendingGames.pendingGames.find((g) => g.id === id);
+  state.pendingGames.pendingGames.find((g: PendingUno) => g.id === id);
 
 /* ---------------- Subscriptions ---------------- */
 

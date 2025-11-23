@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import * as React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { fetchPendingGames, selectGameById, subscribeToUpdates } from '../store/pendingGamesSlice';
@@ -14,7 +14,7 @@ const PendingGame: React.FC = () => {
   const pendingState = useAppSelector((state) => state.pendingGames);
   const game = useAppSelector((state) => selectGameById(state, gameId));
 
-  useEffect(() => {
+  React.useEffect(() => {
     // Guard: if no player name is set, redirect to lobby
     if (!player) {
       navigate('/');

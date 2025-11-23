@@ -4,12 +4,13 @@ import pendingReducer from "./pendingGamesSlice";
 import ongoingReducer from "./ongoingGamesSlice";
 
 export function createAppStore(preloadedState?: Partial<any>) {
+  const reducers = {
+    player: playerReducer,
+    pendingGames: pendingReducer,
+    ongoingGames: ongoingReducer,
+  } as any;
   return configureStore({
-    reducer: {
-      player: playerReducer,
-      pendingGames: pendingReducer,
-      ongoingGames: ongoingReducer,
-    },
+    reducer: reducers,
     preloadedState: preloadedState as any,
   });
 }
