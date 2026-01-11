@@ -31,14 +31,9 @@ export async function startGameServer() {
                 pubsub.publish("ACTIVE_UPDATED", { active });
 
                 // also notify pending subscribers that the lobby is over
-                const ended = {
-                    id: game.id,
-                    creator: active.players[0]?.name ?? "system",
-                    number_of_players: active.players.length,
-                    players: active.players.map((p) => p.name),
-                    pending: false,
-                };
-                pubsub.publish("PENDING_UPDATED", { pending: ended });
+                // signal to pending subscribers that the lobby is over by
+                // publishing a null `pending` payload (matches query behavior)
+                pubsub.publish("PENDING_UPDATED", { pending: null });
             }
         }
     };

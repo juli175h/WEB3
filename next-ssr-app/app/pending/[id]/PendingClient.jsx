@@ -13,41 +13,37 @@ export default function PendingClient({ initialPending, initialError }) {
     if (!pending?.id) return;
     let cancelled = false;
     let unsub = null;
-    let iv = null;
-
-    const startPolling = () => {
-      const check = async () => {
-        try {
-          const data = await queryGraphQL(
-            `
-            query PendingGame($id: ID!) {
-              pending_game(id: $id) {
-                id
-                pending
-                creator
-                players
-                number_of_players
-              }
-            }
-          `,
-            { id: pending.id }
-          );
-          if (cancelled) return;
-          const pg = data?.pending_game ?? null;
-          if (!pg) {
-            window.location.assign(`/game/${pending.id}`);
-            return;
-          }
-          setPending(pg);
-        } catch (err) {
-          // ignore transient network errors; keep polling
-        }
-      };
-      iv = setInterval(check, 1500);
-      check();
-    };
 
     (async () => {
+      // One-time fetch to rehydrate client state in case the subscription
+      // is established after the server-side state changed (avoids missing
+      // the transition from pending → active during hydration).
+      try {
+        const data = await queryGraphQL(
+          `
+          query PendingGame($id: ID!) {
+            pending_game(id: $id) {
+              id
+              pending
+              creator
+              players
+              number_of_players
+            }
+          }
+        `,
+          { id: pending.id }
+        );
+        if (cancelled) return;
+        const pg = data?.pending_game ?? null;
+        if (!pg) {
+          window.location.assign(`/game/${pending.id}`);
+          return;
+        }
+        setPending(pg);
+      } catch (err) {
+        console.warn("Initial pending fetch failed (continuing to subscribe):", err);
+      }
+
       try {
         const sub = await subscribeGraphQL(
           `
@@ -64,6 +60,7 @@ export default function PendingClient({ initialPending, initialError }) {
           { id: pending.id },
           {
             next: (payload) => {
+              console.debug("Pending subscription payload:", payload);
               if (cancelled) return;
               const pg = payload?.pending ?? null;
               if (!pg) {
@@ -74,24 +71,53 @@ export default function PendingClient({ initialPending, initialError }) {
               setPending(pg);
             },
             error: (err) => {
-              console.warn("Subscription failed -- falling back to polling:", err);
-              // on subscription error, start polling fallback
-              if (!iv) startPolling();
+              console.warn("Subscription failed — no polling fallback:", err);
             },
           }
         );
         unsub = sub?.unsubscribe || (() => {});
       } catch (err) {
         // could not subscribe (e.g. no ws support) → fallback to polling
-        console.warn("Could not open subscription; falling back to polling", err);
-        startPolling();
+        console.warn("Could not open subscription; no polling fallback", err);
+      }
+
+      // also subscribe to active matches so we catch the match start even
+      // if pending subscription payloads are shaped differently.
+      try {
+        const activeSub = await subscribeGraphQL(
+          `
+          subscription ActiveSub { active { id pending players { id name } } }
+        `,
+          {},
+          {
+            next: (payload) => {
+              console.debug("Active subscription payload:", payload);
+              if (cancelled) return;
+              const active = payload?.active ?? null;
+              if (active && active.id === pending.id) {
+                window.location.assign(`/game/${pending.id}`);
+              }
+            },
+            error: (err) => {
+              console.warn("Active subscription failed:", err);
+            },
+          }
+        );
+        // chain cleanup
+        const activeUnsub = activeSub?.unsubscribe || (() => {});
+        const oldUnsub = unsub;
+        unsub = () => {
+          try { oldUnsub?.(); } catch (e) {}
+          try { activeUnsub?.(); } catch (e) {}
+        };
+      } catch (err) {
+        console.warn("Could not open active subscription", err);
       }
     })();
 
     return () => {
       cancelled = true;
       try { unsub?.(); } catch (e) {}
-      if (iv) clearInterval(iv);
     };
   }, [pending?.id]);
 
