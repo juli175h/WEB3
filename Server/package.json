@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npx ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/gameServer.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/gameServer.js"
+    "start": "node dist/Server/src/gameServer.js"
   },
   "dependencies": {
     "graphql": "^16.11.0",
