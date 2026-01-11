@@ -8,13 +8,17 @@
     "start": "next start"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.11.2",
     "graphql-ws": "^6.0.6",
     "next": "^13.4.10",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-redux": "^9.2.0"
   },
   "devDependencies": {
+    "@types/node": "25.0.6",
     "@types/react": "^19.2.8",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "typescript": "5.9.3"
   }
 }

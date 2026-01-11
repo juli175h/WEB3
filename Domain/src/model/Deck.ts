@@ -1,4 +1,4 @@
-import type { Card, NumberedCard, ReverseCard, SkipCard, DrawTwoCard, WildCard, WildDrawCard, Color } from "../model/UnoCard";
+import type { Card, NumberedCard, ReverseCard, SkipCard, DrawTwoCard, WildCard, WildDrawCard, Color } from "./UnoCard";
 
 export type RNG = (bound: number) => number;
 

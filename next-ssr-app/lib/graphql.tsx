@@ -3,8 +3,13 @@ const CONFIG_URL =
   process.env.NEXT_PUBLIC_GRAPHQL_URL ||
   null;
 
+// Cache the working endpoint to avoid re-discovery on every request
+let cachedEndpoint: string | null = null;
+
 function generateCandidates() {
   const c = [];
+  // If we have a cached working endpoint, try it first
+  if (cachedEndpoint) c.push(cachedEndpoint);
   // try same-origin proxy first
   c.push("/graphql");
   if (CONFIG_URL) c.push(CONFIG_URL);
@@ -21,7 +26,7 @@ function generateCandidates() {
   return Array.from(new Set(c));
 }
 
-async function tryFetch(url, query, variables) {
+async function tryFetch(url: string, query: string, variables: any) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -38,35 +43,42 @@ async function tryFetch(url, query, variables) {
     const errMsg = json.errors ? JSON.stringify(json.errors) : `${res.status} ${res.statusText}`;
     throw new Error(`GraphQL error from ${url}: ${errMsg}`);
   }
+  // Cache the working endpoint
+  cachedEndpoint = url;
   return json.data;
 }
 
-async function requestGraphQL(query, variables = {}) {
+async function requestGraphQL(query: string, variables = {}) {
   const candidates = generateCandidates();
-  const errors = [];
+  const errors: Array<{ url: string; message: string }> = [];
   for (const url of candidates) {
     try {
       return await tryFetch(url, query, variables);
-    } catch (err) {
+    } catch (err: any) {
       errors.push({ url, message: err?.message || String(err) });
       // continue to next candidate
     }
   }
+  // Clear cache if all endpoints failed
+  cachedEndpoint = null;
   const details = errors.map((e) => `${e.url} -> ${e.message}`).join("; ");
   throw new Error(`Network error when contacting GraphQL endpoint. Attempts: ${details}`);
 }
 
-// New: subscribeGraphQL using graphql-ws (dynamically imported so SSR won't eagerly require ws libs)
-export async function subscribeGraphQL(query, variables = {}, handlers = {}) {
+// Cache the working WebSocket endpoint
+let cachedWsEndpoint: string | null = null;
+
+// subscribeGraphQL using graphql-ws (dynamically imported so SSR won't eagerly require ws libs)
+export async function subscribeGraphQL(query: string, variables: any = {}, handlers: any = {}) {
   if (typeof window === "undefined") {
     // SSR: return noop unsubscribe
     return { unsubscribe: () => {} };
   }
 
-  function toWsUrl(httpUrl) {
+  function toWsUrl(httpUrl: string): string | null {
     if (!httpUrl) return null;
     // same-origin proxy path
-    if (httpUrl === "/graphql" || httpUrl.endsWith("/graphql") && httpUrl.startsWith("/")) {
+    if (httpUrl === "/graphql" || (httpUrl.endsWith("/graphql") && httpUrl.startsWith("/"))) {
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       return `${proto}//${window.location.host}/graphql`;
     }
@@ -77,33 +89,39 @@ export async function subscribeGraphQL(query, variables = {}, handlers = {}) {
     return null;
   }
 
-  const candidates = generateCandidates();
-  const errors = [];
-
   // dynamically import graphql-ws only when trying to subscribe
   const { createClient } = await import("graphql-ws");
 
-  for (const url of candidates) {
+  // If we have a cached WS endpoint, try it first
+  const candidates = cachedWsEndpoint 
+    ? [cachedWsEndpoint, ...generateCandidates().map(toWsUrl).filter(Boolean)]
+    : generateCandidates().map(toWsUrl).filter(Boolean);
+  
+  const errors: Array<{ url: string; message: string }> = [];
+
+  for (const wsUrl of candidates as string[]) {
     try {
-      const wsUrl = toWsUrl(url);
-      if (!wsUrl) continue;
       const client = createClient({ url: wsUrl.replace(/\/+$/, "") });
       // graphql-ws subscribe returns a dispose function in the browser
       const dispose = client.subscribe(
         { query, variables },
         {
-          next: (msg) => { try { handlers.next?.(msg?.data ?? msg); } catch (e) { console.error(e); } },
-          error: (err) => { handlers.error?.(err); },
+          next: (msg: any) => { try { handlers.next?.(msg?.data ?? msg); } catch (e) { console.error(e); } },
+          error: (err: any) => { handlers.error?.(err); },
           complete: () => { handlers.complete?.(); },
         }
       );
+      // Cache the working WS endpoint
+      cachedWsEndpoint = wsUrl;
       return { unsubscribe: () => { try { dispose?.(); } catch(e){ /* ignore */ } } };
-    } catch (err) {
-      errors.push({ url, message: err?.message || String(err) });
+    } catch (err: any) {
+      errors.push({ url: wsUrl, message: err?.message || String(err) });
       // try next candidate
     }
   }
 
+  // Clear cache if all endpoints failed
+  cachedWsEndpoint = null;
   const details = errors.map((e) => `${e.url} -> ${e.message}`).join("; ");
   throw new Error(`Could not establish GraphQL subscription. Attempts: ${details}`);
 }

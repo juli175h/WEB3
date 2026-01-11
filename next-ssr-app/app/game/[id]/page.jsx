@@ -5,48 +5,27 @@ import { useParams } from "next/navigation";
 import { queryGraphQL } from "../../../lib/graphql";
 import GameClient from "./GameClient";
 
-// A placeholder for the Card component, which we will create later.
-const Card = ({ card, onClick, className }) => (
-  <div
-    onClick={onClick}
-    className={className}
-    style={{
-      border: "1px solid black",
-      padding: "10px",
-      margin: "5px",
-      cursor: onClick ? "pointer" : "default",
-    }}
-  >
-    <pre>{JSON.stringify(card, null, 2)}</pre>
-  </div>
-);
-
 export default function GamePage({ params }) {
   const { id } = params;
-
-  // Assume a player name is stored, for now, we'll hardcode it.
-  // This should be replaced with a proper auth/session solution.
-  const user = "player1";
-
   const [game, setGame] = React.useState(null);
-  const [hand, setHand] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
-  // Fetch initial game state and hand
+  // Fetch initial game state only once
   React.useEffect(() => {
     if (!id) return;
+    let cancelled = false;
 
     const loadGame = async () => {
       try {
-        setLoading(true);
         const gameData = await queryGraphQL(
           `
             query Game($id: ID!) {
               game(id: $id) {
                 id
+                pending
                 finished
-                winner { name score }
+                winner { id name score }
                 players { id name score handCount }
                 currentRound {
                   currentPlayerIndex
@@ -67,52 +46,26 @@ export default function GamePage({ params }) {
           `,
           { id }
         );
-        setGame(gameData.game);
-
-        // TODO: Add a 'hand' query to your GraphQL schema and server
-        // For now, we'll leave the hand empty.
-        // const handData = await queryGraphQL( ... get hand query ... );
-        // setHand(handData.hand);
+        if (!cancelled) {
+          setGame(gameData.game);
+          setLoading(false);
+        }
       } catch (e) {
-        setError(e.message || "Failed to load game.");
-      } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setError(e.message || "Failed to load game.");
+          setLoading(false);
+        }
       }
     };
 
     loadGame();
-
-    // TODO: Set up GraphQL subscriptions to get real-time game updates.
+    return () => { cancelled = true; };
   }, [id]);
-
-  const onDraw = async () => {
-    if (!isYourTurn) return;
-    alert("TODO: Implement draw card mutation");
-    // const updatedGame = await execGraphQL( ... draw mutation ... );
-    // setGame(updatedGame);
-    // ... update hand ...
-  };
-
-  const onPlay = async (cardIndex) => {
-    if (!isYourTurn) return;
-    const card = hand[cardIndex];
-    alert(
-      `TODO: Implement play card mutation for card: ${JSON.stringify(card)}`
-    );
-    // const updatedGame = await execGraphQL( ... play card mutation ... );
-    // setGame(updatedGame);
-    // ... update hand ...
-  };
 
   if (loading) return <div>Loading game...</div>;
   if (error) return <div>Error: {error}</div>;
   if (!game) return <div>Game not found.</div>;
 
-  const players = game.players || [];
-  const round = game.currentRound || {};
-  const currentPlayer = players[round.currentPlayerIndex ?? 0];
-  const isYourTurn = user && currentPlayer?.name === user;
-
-  // Render the client component which performs hand fetch + subscriptions
+  // Pass initialGame to GameClient - it will NOT refetch on mount
   return <GameClient initialGame={game} />;
 }

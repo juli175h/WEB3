@@ -8,3 +8,4 @@ export { default as GameTable } from "./GameTable";
 export { default as PlayerHand } from "./PlayerHand";
 export { default as GameActions } from "./GameActions";
 export { default as GameOver } from "./GameOver";
+export { default as ReduxProvider } from "./ReduxProvider";

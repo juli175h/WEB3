@@ -1,11 +1,29 @@
 "use client";
 
 import * as React from "react";
-import { queryGraphQL, execGraphQL } from "../lib/graphql";
 import { getCookie, setCookie, PLAYER_COOKIE } from "../lib/cookies";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { setUser } from "../store/userSlice";
+import { setActiveGames, setPendingGames, setError, fetchLobby, createGame, joinGame } from "../store/gameSlice";
+import { Game, PendingGame } from "../store/types";
 
-export default function LobbyClient({ initialActive, initialPending, initialError }) {
-  // Initialize player name from cookie if available
+interface LobbyClientProps {
+  initialActive: Game[];
+  initialPending: PendingGame[];
+  initialError?: string;
+}
+
+export default function LobbyClient({ initialActive, initialPending, initialError }: LobbyClientProps) {
+  const dispatch = useAppDispatch();
+  
+  // Redux state
+  const user = useAppSelector((state) => state.user.name);
+  const active = useAppSelector((state) => state.game.activeGames);
+  const pending = useAppSelector((state) => state.game.pendingGames);
+  const loading = useAppSelector((state) => state.game.loading);
+  const error = useAppSelector((state) => state.game.error);
+
+  // Local state for form inputs
   const [playerName, setPlayerName] = React.useState(() => {
     if (typeof window !== 'undefined') {
       return getCookie(PLAYER_COOKIE) || '';
@@ -13,28 +31,23 @@ export default function LobbyClient({ initialActive, initialPending, initialErro
     return '';
   });
   const [maxPlayers, setMaxPlayers] = React.useState(2);
-  const [active, setActive] = React.useState(initialActive);
-  const [pending, setPending] = React.useState(initialPending);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(initialError);
 
-  const refresh = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await queryGraphQL(`
-        query LobbyData {
-          games { id finished players { name } }
-          pending_games { id pending number_of_players players }
-        }
-      `);
-      setActive((data?.games || []).filter((g) => !g.finished));
-      setPending(data?.pending_games || []);
-    } catch (e) {
-      setError(e?.message || "Failed to refresh");
-    } finally {
-      setLoading(false);
+  // Initialize from props
+  React.useEffect(() => {
+    dispatch(setActiveGames(initialActive || []));
+    dispatch(setPendingGames(initialPending || []));
+    if (initialError) dispatch(setError(initialError));
+  }, [initialActive, initialPending, initialError, dispatch]);
+
+  // Sync player name with Redux
+  React.useEffect(() => {
+    if (playerName && playerName !== user) {
+      dispatch(setUser(playerName));
     }
+  }, [playerName, user, dispatch]);
+
+  const refresh = () => {
+    dispatch(fetchLobby());
   };
 
   const handleCreate = async () => {
@@ -42,49 +55,25 @@ export default function LobbyClient({ initialActive, initialPending, initialErro
     try {
       // Save player name to cookie before creating game
       setCookie(PLAYER_COOKIE, playerName.trim());
-      const res = await execGraphQL(
-        `
-        mutation NewGame($creator: String!, $n: Int!) {
-          new_game(creator: $creator, number_of_players: $n) {
-            __typename
-            ... on PendingGame { id }
-            ... on ActiveMatch { id }
-          }
-        }
-      `,
-        { creator: playerName.trim(), n: maxPlayers }
-      );
-      const g = res?.new_game;
-      if (!g) throw new Error("No result");
-      const to = g.__typename === "PendingGame" ? `/pending/${g.id}` : `/game/${g.id}`;
+      const result = await dispatch(createGame({ creator: playerName.trim(), numberOfPlayers: maxPlayers })).unwrap();
+      if (!result) throw new Error("No result");
+      const to = result.__typename === "PendingGame" ? `/pending/${result.id}` : `/game/${result.id}`;
       window.location.assign(to);
-    } catch (e) {
+    } catch (e: any) {
       alert(e?.message || "Could not create game");
     }
   };
 
-  const handleJoinPending = async (id) => {
+  const handleJoinPending = async (id: string) => {
     if (!playerName.trim()) return alert("Enter your name");
     try {
       // Save player name to cookie before joining game
       setCookie(PLAYER_COOKIE, playerName.trim());
-      const res = await execGraphQL(
-        `
-        mutation Join($id: ID!, $player: String!) {
-          join(id: $id, player: $player) {
-            __typename
-            ... on PendingGame { id }
-            ... on ActiveMatch { id }
-          }
-        }
-      `,
-        { id, player: playerName.trim() }
-      );
-      const g = res?.join;
-      if (!g) throw new Error("No result");
-      const to = g.__typename === "PendingGame" ? `/pending/${g.id}` : `/game/${g.id}`;
+      const result = await dispatch(joinGame({ id, player: playerName.trim() })).unwrap();
+      if (!result) throw new Error("No result");
+      const to = result.__typename === "PendingGame" ? `/pending/${result.id}` : `/game/${result.id}`;
       window.location.assign(to);
-    } catch (e) {
+    } catch (e: any) {
       alert(e?.message || "Could not join game");
     }
   };

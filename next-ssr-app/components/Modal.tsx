@@ -2,10 +2,16 @@
 
 import React from "react";
 
+interface ModalProps {
+  open: boolean;
+  onClose?: () => void;
+  children: React.ReactNode;
+}
+
 /**
  * Reusable modal overlay component
  */
-export default function Modal({ open, onClose, children }) {
+export default function Modal({ open, onClose, children }: ModalProps) {
   if (!open) return null;
 
   return (

@@ -1,49 +1,21 @@
 "use client";
 
 import * as React from "react";
-import { queryGraphQL, subscribeGraphQL } from "../../../lib/graphql";
+import { subscribeGraphQL } from "../../../lib/graphql";
 
 export default function PendingClient({ initialPending, initialError }) {
   const [pending, setPending] = React.useState(initialPending);
   const [error, setError] = React.useState(initialError);
 
-  // Replace polling with a subscription; fall back to polling if subscription can't be established.
+  // Subscribe to updates - skip initial fetch since we have initialPending from SSR
   React.useEffect(() => {
     if (!pending?.id) return;
     let cancelled = false;
     let unsub = null;
 
     (async () => {
-      // One-time fetch to rehydrate client state in case the subscription
-      // is established after the server-side state changed (avoids missing
-      // the transition from pending → active during hydration).
-      try {
-        const data = await queryGraphQL(
-          `
-          query PendingGame($id: ID!) {
-            pending_game(id: $id) {
-              id
-              pending
-              creator
-              players
-              number_of_players
-            }
-          }
-        `,
-          { id: pending.id }
-        );
-        if (cancelled) return;
-        const pg = data?.pending_game ?? null;
-        if (!pg) {
-          // Game already started - redirect to game page
-          // Cookie is already set, no need to pass player in URL
-          window.location.assign(`/game/${pending.id}`);
-          return;
-        }
-        setPending(pg);
-      } catch (err) {
-        console.warn("Initial pending fetch failed (continuing to subscribe):", err);
-      }
+      // Skip initial fetch - we already have data from props
+      // Just set up subscriptions for real-time updates
 
       try {
         const sub = await subscribeGraphQL(
@@ -66,30 +38,25 @@ export default function PendingClient({ initialPending, initialError }) {
               const pg = payload?.pending ?? null;
               if (!pg) {
                 // lobby gone → redirect to the active game page (same id)
-                // Cookie is already set, no need to pass player in URL
                 window.location.assign(`/game/${pending.id}`);
                 return;
               }
               setPending(pg);
             },
             error: (err) => {
-              console.warn("Subscription failed — no polling fallback:", err);
+              console.warn("Subscription failed:", err);
             },
           }
         );
         unsub = sub?.unsubscribe || (() => {});
       } catch (err) {
-        // could not subscribe (e.g. no ws support) → fallback to polling
-        console.warn("Could not open subscription; no polling fallback", err);
+        console.warn("Could not open subscription", err);
       }
 
-      // also subscribe to active matches so we catch the match start even
-      // if pending subscription payloads are shaped differently.
+      // also subscribe to active matches so we catch the match start
       try {
         const activeSub = await subscribeGraphQL(
-          `
-          subscription ActiveSub { active { id pending players { id name } } }
-        `,
+          `subscription ActiveSub { active { id pending players { id name } } }`,
           {},
           {
             next: (payload) => {
@@ -97,7 +64,6 @@ export default function PendingClient({ initialPending, initialError }) {
               if (cancelled) return;
               const active = payload?.active ?? null;
               if (active && active.id === pending.id) {
-                // Cookie is already set, no need to pass player in URL
                 window.location.assign(`/game/${pending.id}`);
               }
             },
@@ -106,7 +72,6 @@ export default function PendingClient({ initialPending, initialError }) {
             },
           }
         );
-        // chain cleanup
         const activeUnsub = activeSub?.unsubscribe || (() => {});
         const oldUnsub = unsub;
         unsub = () => {
