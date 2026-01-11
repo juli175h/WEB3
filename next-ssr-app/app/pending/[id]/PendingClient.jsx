@@ -3,8 +3,27 @@
 import * as React from "react";
 import { execGraphQL, queryGraphQL, subscribeGraphQL } from "../../../lib/graphql";
 
+// Cookie helper functions
+function setCookie(name, value, days = 7) {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+}
+
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+  return null;
+}
+
 export default function PendingClient({ initialPending, initialError }) {
-  const [playerName, setPlayerName] = React.useState("");
+  // Initialize player name from cookie if available
+  const [playerName, setPlayerName] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      return getCookie('uno.player') || '';
+    }
+    return '';
+  });
   const [pending, setPending] = React.useState(initialPending);
   const [error, setError] = React.useState(initialError);
 
@@ -36,6 +55,8 @@ export default function PendingClient({ initialPending, initialError }) {
         if (cancelled) return;
         const pg = data?.pending_game ?? null;
         if (!pg) {
+          // Game already started - redirect to game page
+          // Cookie is already set, no need to pass player in URL
           window.location.assign(`/game/${pending.id}`);
           return;
         }
@@ -65,6 +86,7 @@ export default function PendingClient({ initialPending, initialError }) {
               const pg = payload?.pending ?? null;
               if (!pg) {
                 // lobby gone → redirect to the active game page (same id)
+                // Cookie is already set, no need to pass player in URL
                 window.location.assign(`/game/${pending.id}`);
                 return;
               }
@@ -95,6 +117,7 @@ export default function PendingClient({ initialPending, initialError }) {
               if (cancelled) return;
               const active = payload?.active ?? null;
               if (active && active.id === pending.id) {
+                // Cookie is already set, no need to pass player in URL
                 window.location.assign(`/game/${pending.id}`);
               }
             },
@@ -124,6 +147,8 @@ export default function PendingClient({ initialPending, initialError }) {
   const handleJoin = async () => {
     if (!playerName.trim()) return alert("Enter your name");
     try {
+      // Save player name to cookie before joining
+      setCookie('uno.player', playerName.trim());
       const res = await execGraphQL(
         `
         mutation Join($id: ID!, $player: String!) {

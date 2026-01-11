@@ -2,81 +2,193 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import { queryGraphQL, execGraphQL } from "../../../lib/graphql";
+import { queryGraphQL, execGraphQL, subscribeGraphQL } from "../../../lib/graphql";
+import Card from "../../../components/Card";
+
+// Cookie helper function
+function getCookie(name) {
+  if (typeof document === 'undefined') return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+  return null;
+}
 
 // A placeholder for the Card component, which we will create later.
-const Card = ({ card, onClick, className }) => (
-  <div
-    onClick={onClick}
-    className={className}
-    style={{
-      border: "1px solid black",
-      padding: "10px",
-      margin: "5px",
-      cursor: onClick ? "pointer" : "default",
-    }}
-  >
-    <pre>{JSON.stringify(card, null, 2)}</pre>
-  </div>
-);
+// Removed the placeholder Card component definition as we are now importing it.
 
 export default function GameClient({ initialGame }) {
   const params = useParams();
   const id = params.id;
 
-  // Assume a player name is stored, for now, we'll hardcode it.
-  // This should be replaced with a proper auth/session solution.
-  const user = "player1";
+  // Read the player name from cookie (set during join/create)
+  const [user, setUser] = React.useState(() => {
+    try {
+      if (typeof window !== "undefined") return getCookie("uno.player");
+    } catch (e) {}
+    return null;
+  });
+
+  React.useEffect(() => {
+    if (!user) {
+      try {
+        const u = typeof window !== "undefined" ? getCookie("uno.player") : null;
+        if (u) setUser(u);
+      } catch (e) {}
+    }
+  }, [user]);
 
   const [game, setGame] = React.useState(initialGame);
   const [hand, setHand] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
 
+  // Compute current player and turn status (derived from game state)
+  const players = game.players || [];
+  const round = game.currentRound || {};
+  const currentPlayer = players[round.currentPlayerIndex ?? 0];
+  const isYourTurn = user && currentPlayer?.name === user;
+
   // Fetch hand and set up subscriptions
+  const fetchHand = React.useCallback(async (forPlayer) => {
+    if (!id || !forPlayer) return;
+    try {
+      setError(null);
+      const handData = await queryGraphQL(
+        `
+        query Hand($id: ID!, $player: String!) {
+          hand(id: $id, player: $player) {
+            __typename
+            ... on NumberedCard { type color value }
+            ... on ReverseCard { type color value }
+            ... on SkipCard { type color value }
+            ... on DrawTwoCard { type color value }
+            ... on WildCard { type color value }
+            ... on WildDrawCard { type color value }
+          }
+        }
+      `,
+        { id, player: forPlayer }
+      );
+      console.debug("fetchHand result:", handData);
+      setHand(handData.hand || []);
+    } catch (e) {
+      console.error("Failed to fetch hand:", e);
+      setHand([]);
+      setError(e?.message || String(e) || "Could not load your hand.");
+    }
+  }, [id]);
+
   React.useEffect(() => {
     if (!id || !user) return;
+    fetchHand(user);
+  }, [id, user, fetchHand]);
 
-    const fetchHand = async () => {
-      try {
-        const handData = await queryGraphQL(
-          `
-          query Hand($id: ID!, $player: String!) {
-            hand(id: $id, player: $player) {
-              __typename
-              ... on NumberedCard { type color value }
-              ... on ReverseCard { type color value }
-              ... on SkipCard { type color value }
-              ... on DrawTwoCard { type color value }
-              ... on WildCard { type color value }
-              ... on WildDrawCard { type color value }
+  // Fetch game state
+  const fetchGame = React.useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await queryGraphQL(
+        `query Game($id: ID!) {
+          game(id: $id) {
+            id
+            pending
+            finished
+            winner { id name score }
+            players { id name score handCount }
+            currentRound {
+              currentPlayerIndex
+              direction
+              discardTop {
+                __typename
+                ... on NumberedCard { type color value }
+                ... on ReverseCard { type color value }
+                ... on SkipCard { type color value }
+                ... on DrawTwoCard { type color value }
+                ... on WildCard { type color value }
+                ... on WildDrawCard { type color value }
+              }
+              drawPileCount
             }
           }
-        `,
-          { id, player: user }
+        }`,
+        { id }
+      );
+      if (data?.game) setGame(data.game);
+    } catch (e) {
+      console.error("Failed to fetch game:", e);
+    }
+  }, [id]);
+
+  // Subscribe to game updates
+  React.useEffect(() => {
+    if (!id) return;
+    let unsub = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const sub = await subscribeGraphQL(
+          `subscription ActiveSub {
+            active {
+              id
+              pending
+              finished
+              winner { id name score }
+              players { id name score handCount }
+              currentRound {
+                currentPlayerIndex
+                direction
+                discardTop {
+                  __typename
+                  ... on NumberedCard { type color value }
+                  ... on ReverseCard { type color value }
+                  ... on SkipCard { type color value }
+                  ... on DrawTwoCard { type color value }
+                  ... on WildCard { type color value }
+                  ... on WildDrawCard { type color value }
+                }
+                drawPileCount
+              }
+            }
+          }`,
+          {},
+          {
+            next: (payload) => {
+              if (cancelled) return;
+              const active = payload?.active;
+              if (active && active.id === id) {
+                setGame(active);
+                // Refetch hand when game updates
+                if (user) fetchHand(user);
+              }
+            },
+            error: (err) => {
+              console.warn("Game subscription error:", err);
+            },
+          }
         );
-        setHand(handData.hand || []);
-      } catch (e) {
-        console.error("Failed to fetch hand:", e);
-        setError("Could not load your hand.");
+        unsub = sub?.unsubscribe;
+      } catch (err) {
+        console.warn("Could not subscribe to game updates:", err);
       }
+    })();
+
+    return () => {
+      cancelled = true;
+      try { unsub?.(); } catch (e) {}
     };
-
-    fetchHand();
-
-    // TODO: Set up GraphQL subscriptions to get real-time game updates.
-    // The subscription would update the `game` state.
-  }, [id, user]);
+  }, [id, user, fetchHand]);
 
   const onDraw = async () => {
     if (!isYourTurn) return;
     try {
-      const res = await execGraphQL(
+      await execGraphQL(
         `mutation Draw($id: ID!, $player: String!) { draw(id: $id, player: $player) { id } }`,
         { id, player: user }
       );
-      // Game state will be updated via subscription, but for now we can just alert.
-      alert("Card drawn! (Game state will update via subscription)");
+      // Refetch hand and game state after drawing
+      await Promise.all([fetchHand(user), fetchGame()]);
     } catch (e) {
       alert(e.message || "Could not draw card.");
     }
@@ -87,37 +199,42 @@ export default function GameClient({ initialGame }) {
     const card = hand[cardIndex];
     let chosenColor;
     if (card.type === "WildCard" || card.type === "WildDrawCard") {
-      chosenColor = prompt("Choose a color (Red, Green, Blue, Yellow):");
-      if (!["Red", "Green", "Blue", "Yellow"].includes(chosenColor)) {
+      const colorInput = prompt("Choose a color (Red, Green, Blue, Yellow):");
+      const colorMap = { "Red": "RED", "Green": "GREEN", "Blue": "BLUE", "Yellow": "YELLOW" };
+      chosenColor = colorMap[colorInput];
+      if (!chosenColor) {
         return alert("Invalid color.");
       }
     }
 
     try {
       await execGraphQL(
-        `mutation Play($id: ID!, $player: String!, $handIndex: Int!, $chosenColor: Color) {
-          play(id: $id, player: $player, handIndex: $handIndex, chosenColor: $chosenColor) { id }
+        `mutation PlayCard($id: ID!, $player: String!, $handIndex: Int!, $chosenColor: Color) {
+          playCardByIndex(id: $id, player: $player, handIndex: $handIndex, chosenColor: $chosenColor) { id }
         }`,
-        { id, player: user, handIndex, chosenColor }
+        { id, player: user, handIndex: cardIndex, chosenColor }
       );
-      // Game state will be updated via subscription
-      alert("Card played! (Game state will update via subscription)");
+      // Refetch hand and game state after playing
+      await Promise.all([fetchHand(user), fetchGame()]);
     } catch (e) {
       alert(e.message || "Could not play card.");
     }
   };
 
   if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
 
-  const players = game.players || [];
-  const round = game.currentRound || {};
-  const currentPlayer = players[round.currentPlayerIndex ?? 0];
-  const isYourTurn = user && currentPlayer?.name === user;
+  if (error) return (
+    <div>
+      <div style={{ color: 'crimson' }}>Error: {error}</div>
+      <p>Please make sure you joined this game from the lobby.</p>
+      <a href="/">← Back to Lobby</a>
+    </div>
+  );
 
   return (
     <>
       <h2>UNO Match #{game.id}</h2>
+      <p style={{ marginBottom: 16 }}>Playing as: <strong>{user}</strong></p>
 
       <section>
         <h3>Players</h3>
@@ -127,13 +244,36 @@ export default function GameClient({ initialGame }) {
               key={p.id}
               style={{
                 fontWeight: p.id === currentPlayer?.id ? "bold" : "normal",
+                marginBottom: 12,
               }}
             >
-              <span>{p.name}</span>{" "}
-              <small>
-                (cards: {p.handCount} · score: {p.score}
-                {p.id === currentPlayer?.id ? " · current turn" : ""})
-              </small>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div>
+                  <strong>{p.name}</strong>
+                  <div style={{ fontSize: 12, color: "#666" }}>
+                    (cards: {p.handCount} · score: {p.score}{p.id === currentPlayer?.id ? " · current turn" : ""})
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 6 }}>
+                  {/* If this is the local user, show their actual hand (if available);
+                      otherwise show a simple message. For other players always show
+                      face-down placeholders so we don't leak card info. */}
+                  {p.name === user ? (
+                    hand.length > 0 ? (
+                      hand.map((c, i) => (
+                        <Card key={i} card={c} onClick={isYourTurn ? () => onPlay(i) : undefined} />
+                      ))
+                    ) : (
+                      <div style={{ fontStyle: "italic", color: "#666" }}>You have no cards.</div>
+                    )
+                  ) : (
+                    Array.from({ length: p.handCount }).map((_, i) => (
+                      <Card key={i} faceDown />
+                    ))
+                  )}
+                </div>
+              </div>
             </li>
           ))}
         </ul>
