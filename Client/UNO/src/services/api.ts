@@ -23,23 +23,60 @@ import { Subject } from "rxjs";
 
 const isBrowser = typeof window !== "undefined";
 
-const httpLink = new HttpLink({ uri: "http://localhost:4000/graphql" });
+// Choose GraphQL base URL:
+// 1) Vite env: import.meta.env.VITE_GRAPHQL_URL (e.g. "http://localhost:4000")
+// 2) runtime browser: same host with port 4000
+// 3) fallback: http://localhost:4000
+const envUrl =
+  typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GRAPHQL_URL
+    ? (import.meta as any).env.VITE_GRAPHQL_URL
+    : (process.env.GRAPHQL_URL as string | undefined) || undefined;
 
-let apollo: ApolloClient;
+const defaultPort = "4000";
+
+function buildHttpUrl(): string {
+  if (envUrl) return envUrl.replace(/\/$/, "");
+  if (isBrowser) {
+    const proto = window.location.protocol;
+    const host = window.location.hostname;
+    return `${proto}//${host}:${defaultPort}`;
+  }
+  return `http://localhost:${defaultPort}`;
+}
+
+function buildWsUrl(httpBase: string): string {
+  // convert http(s) to ws(s)
+  if (httpBase.startsWith("https://")) return httpBase.replace(/^https:/, "wss:");
+  if (httpBase.startsWith("http://")) return httpBase.replace(/^http:/, "ws:");
+  // fallback
+  return `ws://localhost:${defaultPort}`;
+}
+
+const httpBase = buildHttpUrl();
+const httpLink = new HttpLink({ uri: `${httpBase.replace(/\/$/, "")}/graphql` });
+
+let apollo: ApolloClient<any>;
 
 if (isBrowser) {
-  const wsLink = new GraphQLWsLink(createClient({ url: "ws://localhost:4000/graphql" }));
+  try {
+    const wsBase = buildWsUrl(httpBase);
+    const wsLink = new GraphQLWsLink(createClient({ url: `${wsBase.replace(/\/$/, "")}/graphql` }));
 
-  const splitLink = split(
-    ({ query }) => {
-      const def = getMainDefinition(query);
-      return def.kind === "OperationDefinition" && def.operation === "subscription";
-    },
-    wsLink,
-    httpLink
-  );
+    const splitLink = split(
+      ({ query }) => {
+        const def = getMainDefinition(query);
+        return def.kind === "OperationDefinition" && def.operation === "subscription";
+      },
+      wsLink,
+      httpLink
+    );
 
-  apollo = new ApolloClient({ link: splitLink, cache: new InMemoryCache() });
+    apollo = new ApolloClient({ link: splitLink, cache: new InMemoryCache() });
+  } catch (err) {
+    // If WS setup fails in the browser, fall back to HTTP-only Apollo client
+    console.warn("Failed to create WS link for subscriptions, falling back to HTTP. Error:", err);
+    apollo = new ApolloClient({ link: httpLink, cache: new InMemoryCache() });
+  }
 } else {
   // SSR: don't create WS link — use plain HTTP client. Subscriptions are no-ops on server.
   apollo = new ApolloClient({ link: httpLink, cache: new InMemoryCache() });
@@ -48,15 +85,27 @@ if (isBrowser) {
 /* ---------------- Helpers ---------------- */
 
 async function query<T>(query: DocumentNode, variables?: any): Promise<T> {
-  const res = await apollo.query<T>({ query, variables, fetchPolicy: "network-only" });
-  if (!res.data) throw new Error("No data returned from query");
-  return res.data;
+  try {
+    const res = await apollo.query<T>({ query, variables, fetchPolicy: "network-only" });
+    if (!res.data) throw new Error("No data returned from query");
+    return res.data;
+  } catch (err: any) {
+    const msg = `GraphQL query failed (url=${httpLink.options?.uri ?? httpBase}): ${err?.message ?? err}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
 }
 
 async function mutate<T>(mutation: DocumentNode, variables?: any): Promise<T> {
-  const res = await apollo.mutate<T>({ mutation, variables, fetchPolicy: "network-only" });
-  if (!res.data) throw new Error("No data returned from mutation");
-  return res.data;
+  try {
+    const res = await apollo.mutate<T>({ mutation, variables, fetchPolicy: "network-only" });
+    if (!res.data) throw new Error("No data returned from mutation");
+    return res.data;
+  } catch (err: any) {
+    const msg = `GraphQL mutation failed (url=${httpLink.options?.uri ?? httpBase}): ${err?.message ?? err}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
 }
 
 /* ---------------- Subscriptions ---------------- */

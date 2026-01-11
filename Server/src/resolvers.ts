@@ -119,10 +119,10 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
 
     Subscription: {
       active: {
-        subscribe: () => pubsub.asyncIterableIterator(["ACTIVE_UPDATED"]),
+        subscribe: () => pubsub.asyncIterator(["ACTIVE_UPDATED"]),
       },
       pending: {
-        subscribe: () => pubsub.asyncIterableIterator(["PENDING_UPDATED"]),
+        subscribe: () => pubsub.asyncIterator(["PENDING_UPDATED"]),
       },
     },
   };

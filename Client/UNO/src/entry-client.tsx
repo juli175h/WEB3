@@ -4,7 +4,7 @@ import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { createAppStore } from './store/store';
-import { onPending } from './services/api';
+import SubscriptionProvider from './components/SubscriptionProvider';
 
 const container = document.getElementById('root')!;
 
@@ -17,15 +17,12 @@ hydrateRoot(
   <React.StrictMode>
     <Provider store={store}>
       <BrowserRouter>
-        <App />
+        <SubscriptionProvider>
+          <App />
+        </SubscriptionProvider>
       </BrowserRouter>
     </Provider>
   </React.StrictMode>
 );
 
-// Start subscriptions in the browser
-try {
-  onPending(() => {});
-} catch (err) {
-  // noop
-}
+// SubscriptionProvider starts subscriptions; no manual onPending() here.

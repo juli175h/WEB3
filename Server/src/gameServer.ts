@@ -7,30 +7,60 @@ import { expressMiddleware } from "@as-integrations/express4";
 import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import { useServer } from "graphql-ws/use/ws";
-import { PubSub } from "graphql-subscriptions";
 import { readFile } from "fs/promises";
-import path from "path";
-import { pathToFileURL } from "url";
-import fs from "fs";
+import { PubSub } from "graphql-subscriptions";
 
 import { MemoryStore } from "./memorystore";
-import { ServerModel } from "./serverModel.fp";
-import { create_api } from "./api";
+import { ServerModel, IndexedUnoMatch, PendingGame } from "./serverModel.fp";
+import { create_api, Broadcaster, toGraphQLMatch } from "./api";
 import { create_resolvers } from "./resolvers";
 
-async function start() {
-    const pubsub = new PubSub(); // ✅ no casting
+export async function startGameServer() {
+    const pubsub = new PubSub();
     const store = new MemoryStore();
     const serverModel = new ServerModel(store);
 
-    const api = create_api(pubsub, serverModel);
+    const broadcaster: Broadcaster = {
+        async broadcast(game: IndexedUnoMatch | PendingGame) {
+            if (game.pending) {
+                console.log("🔁 Broadcasting pending update:", game.id);
+                pubsub.publish("PENDING_UPDATED", { pending: game });
+            } else {
+                console.log("🚀 Broadcasting ACTIVE_UPDATED:", game.id);
+                const active = toGraphQLMatch(game as IndexedUnoMatch);
+                pubsub.publish("ACTIVE_UPDATED", { active });
+
+                // also notify pending subscribers that the lobby is over
+                const ended = {
+                    id: game.id,
+                    creator: active.players[0]?.name ?? "system",
+                    number_of_players: active.players.length,
+                    players: active.players.map((p) => p.name),
+                    pending: false,
+                };
+                pubsub.publish("PENDING_UPDATED", { pending: ended });
+            }
+        }
+    };
+
+    const api = create_api(broadcaster, serverModel);
 
     const typeDefs = `#graphql\n${await readFile("./Uno.sdl", "utf8")}`;
     const resolvers = create_resolvers(pubsub, api);
     const schema = makeExecutableSchema({ typeDefs, resolvers });
 
     const app = express();
-    app.use(cors({ origin: /:\/\/localhost:/ }));
+    // allow localhost and 127.0.0.1 on any port, plus the explicit dev host
+    app.use(
+      cors({
+        origin: [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          /:\/\/(?:localhost|127\.0\.0\.1):\d{1,5}$/,
+        ],
+        methods: ["GET", "POST", "OPTIONS"],
+      })
+    );
     app.use(express.json());
 
     const httpServer = http.createServer(app);
@@ -59,55 +89,19 @@ async function start() {
     await server.start();
     app.use("/graphql", expressMiddleware(server, { context: async () => ({ pubsub, api }) }));
 
-        // Resolve repository root robustly (works whether server is started from repo root or Server/)
-        const cwd = process.cwd();
-        let repoRoot = cwd;
-
-        // If running with cwd at Server/, repo root is parent
-        if (path.basename(cwd) === 'Server') {
-            repoRoot = path.resolve(cwd, '..');
-        }
-
-        // If still not containing Client/UNO, try parent
-        if (!fs.existsSync(path.join(repoRoot, 'Client', 'UNO'))) {
-            const parent = path.resolve(repoRoot, '..');
-            if (fs.existsSync(path.join(parent, 'Client', 'UNO'))) repoRoot = parent;
-        }
-
-        // Serve built client assets (assumes Client/UNO built to dist)
-        const clientDist = path.join(repoRoot, 'Client', 'UNO', 'dist');
-        app.use(express.static(clientDist));
-
-        // Serve card images moved into the Server repo under src/Cards
-        const cardsDir = path.join(repoRoot, 'Server', 'src', 'Cards');
-        app.use('/assets/Cards', express.static(cardsDir));
-
-        // SSR handler — load server bundle produced by Vite SSR build
-        app.get("*", async (req, res) => {
-            try {
-                const indexHtml = await readFile(path.join(clientDist, "index.html"), "utf8");
-                // server bundle path (Vite outputs SSR build to dist/server)
-                const serverEntry = path.join(clientDist, "server", "entry-server.js");
-            const mod = await import(pathToFileURL(serverEntry).toString());
-                const { render } = mod;
-                const { html, state } = await render(req.originalUrl);
-
-                const safeState = JSON.stringify(state).replace(/</g, "\\u003c");
-                const result = indexHtml.replace('<div id="root"></div>', `<div id="root">${html}</div><script>window.__INITIAL_STATE__=${safeState}</script>`);
-                res.status(200).set({ "Content-Type": "text/html" }).send(result);
-            } catch (err) {
-                console.error('SSR render failed:', err);
-                res.status(500).send('SSR error');
-            }
-        });
-
     const PORT = 4000;
-    httpServer.listen(PORT, () => {
-        console.log(`🚀 UNO GraphQL server running at http://localhost:${PORT}/graphql`);
+    // bind to all interfaces so browser (localhost/127.0.0.1) can reach the server
+    httpServer.listen(PORT, "0.0.0.0", () => {
+        console.log(`🚀 UNO GraphQL server running at http://localhost:${PORT}/graphql (bound to 0.0.0.0)`);
     });
 }
 
-start().catch((err) => {
-    console.error("💥 Server crashed:", err);
+// Add a top-level invocation so running this file (ts-node-dev src/gameServer.ts)
+// actually starts the server. This is safe to run directly; if the module is
+// imported, the exported function can still be used without starting.
+if (require.main === module) {
+  startGameServer().catch((err) => {
+    console.error("Failed to start game server:", err);
     process.exit(1);
-});
+  });
+}
