@@ -1,29 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { execGraphQL, queryGraphQL, subscribeGraphQL } from "../../../lib/graphql";
-
-// Cookie helper functions
-function setCookie(name, value, days = 7) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
-}
-
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
-  return null;
-}
+import { queryGraphQL, subscribeGraphQL } from "../../../lib/graphql";
 
 export default function PendingClient({ initialPending, initialError }) {
-  // Initialize player name from cookie if available
-  const [playerName, setPlayerName] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      return getCookie('uno.player') || '';
-    }
-    return '';
-  });
   const [pending, setPending] = React.useState(initialPending);
   const [error, setError] = React.useState(initialError);
 
@@ -144,32 +124,6 @@ export default function PendingClient({ initialPending, initialError }) {
     };
   }, [pending?.id]);
 
-  const handleJoin = async () => {
-    if (!playerName.trim()) return alert("Enter your name");
-    try {
-      // Save player name to cookie before joining
-      setCookie('uno.player', playerName.trim());
-      const res = await execGraphQL(
-        `
-        mutation Join($id: ID!, $player: String!) {
-          join(id: $id, player: $player) {
-            __typename
-            ... on PendingGame { id }
-            ... on ActiveMatch { id }
-          }
-        }
-      `,
-        { id: pending.id, player: playerName.trim() }
-      );
-      const g = res?.join;
-      if (!g) throw new Error("No result");
-      const to = g.__typename === "PendingGame" ? `/pending/${g.id}` : `/game/${g.id}`;
-      window.location.assign(to);
-    } catch (e) {
-      alert(e?.message || "Could not join game");
-    }
-  };
-
   if (error) return <p style={{ color: "crimson" }}>{error}</p>;
   if (!pending) return <p>Pending game not found.</p>;
 
@@ -179,17 +133,6 @@ export default function PendingClient({ initialPending, initialError }) {
         <p>
           Creator: {pending.creator} — Players: {pending.players?.length ?? 0}/{pending.number_of_players}
         </p>
-
-        <div style={{ margin: "8px 0" }}>
-          <input
-            placeholder="Your name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-          />
-          <button onClick={handleJoin} style={{ marginLeft: 8 }}>
-            Join Game
-          </button>
-        </div>
 
         {pending.players && pending.players.length > 0 && (
           <div>

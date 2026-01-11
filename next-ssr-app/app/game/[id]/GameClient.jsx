@@ -3,19 +3,16 @@
 import * as React from "react";
 import { useParams } from "next/navigation";
 import { queryGraphQL, execGraphQL, subscribeGraphQL } from "../../../lib/graphql";
-import Card from "../../../components/Card";
-
-// Cookie helper function
-function getCookie(name) {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
-  return null;
-}
-
-// A placeholder for the Card component, which we will create later.
-// Removed the placeholder Card component definition as we are now importing it.
+import { getCookie, PLAYER_COOKIE } from "../../../lib/cookies";
+import {
+  ColorPickerModal,
+  DrawnCardModal,
+  PlayerList,
+  GameTable,
+  PlayerHand,
+  GameActions,
+  GameOver,
+} from "../../../components";
 
 export default function GameClient({ initialGame }) {
   const params = useParams();
@@ -24,7 +21,7 @@ export default function GameClient({ initialGame }) {
   // Read the player name from cookie (set during join/create)
   const [user, setUser] = React.useState(() => {
     try {
-      if (typeof window !== "undefined") return getCookie("uno.player");
+      if (typeof window !== "undefined") return getCookie(PLAYER_COOKIE);
     } catch (e) {}
     return null;
   });
@@ -32,7 +29,7 @@ export default function GameClient({ initialGame }) {
   React.useEffect(() => {
     if (!user) {
       try {
-        const u = typeof window !== "undefined" ? getCookie("uno.player") : null;
+        const u = typeof window !== "undefined" ? getCookie(PLAYER_COOKIE) : null;
         if (u) setUser(u);
       } catch (e) {}
     }
@@ -320,210 +317,50 @@ export default function GameClient({ initialGame }) {
   return (
     <>
       {/* Color Picker Modal */}
-      {colorPickerOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            padding: 24,
-            borderRadius: 12,
-            textAlign: 'center'
-          }}>
-            <h3 style={{ marginTop: 0 }}>Choose a color</h3>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button
-                onClick={() => onColorSelect('RED')}
-                style={{ width: 60, height: 60, backgroundColor: '#f44336', border: 'none', borderRadius: 8, cursor: 'pointer' }}
-                aria-label="Red"
-              />
-              <button
-                onClick={() => onColorSelect('BLUE')}
-                style={{ width: 60, height: 60, backgroundColor: '#2196f3', border: 'none', borderRadius: 8, cursor: 'pointer' }}
-                aria-label="Blue"
-              />
-              <button
-                onClick={() => onColorSelect('GREEN')}
-                style={{ width: 60, height: 60, backgroundColor: '#4caf50', border: 'none', borderRadius: 8, cursor: 'pointer' }}
-                aria-label="Green"
-              />
-              <button
-                onClick={() => onColorSelect('YELLOW')}
-                style={{ width: 60, height: 60, backgroundColor: '#ffeb3b', border: 'none', borderRadius: 8, cursor: 'pointer' }}
-                aria-label="Yellow"
-              />
-            </div>
-            <button
-              onClick={() => { setColorPickerOpen(false); setPendingCardIndex(null); }}
-              style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <ColorPickerModal
+        open={colorPickerOpen}
+        onSelect={onColorSelect}
+        onCancel={() => { setColorPickerOpen(false); setPendingCardIndex(null); }}
+      />
 
       {/* Drawn Card Modal */}
-      {drawnCardModal.open && drawnCardModal.card && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            padding: 24,
-            borderRadius: 12,
-            textAlign: 'center',
-            minWidth: 280
-          }}>
-            <h3 style={{ marginTop: 0 }}>You drew a card!</h3>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <Card card={drawnCardModal.card} />
-            </div>
-            {canPlay(drawnCardModal.card) ? (
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button
-                  onClick={onPlayDrawnCard}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#4caf50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: 16
-                  }}
-                >
-                  Play Card
-                </button>
-                <button
-                  onClick={onSkipAfterDraw}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#9e9e9e',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: 16
-                  }}
-                >
-                  Keep & Skip
-                </button>
-              </div>
-            ) : (
-              <div>
-                <p style={{ color: '#666', marginBottom: 12 }}>This card cannot be played right now.</p>
-                <button
-                  onClick={onSkipAfterDraw}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#2196f3',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: 16
-                  }}
-                >
-                  End Turn
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <DrawnCardModal
+        open={drawnCardModal.open}
+        card={drawnCardModal.card}
+        canPlay={drawnCardModal.card ? canPlay(drawnCardModal.card) : false}
+        onPlay={onPlayDrawnCard}
+        onSkip={onSkipAfterDraw}
+        onClose={() => setDrawnCardModal({ open: false, card: null, cardIndex: null })}
+      />
 
       <h2>UNO Match #{game.id}</h2>
       <p style={{ marginBottom: 16 }}>Playing as: <strong>{user}</strong></p>
 
-      <section>
-        <h3>Players</h3>
-        <ul>
-          {players.map((p) => (
-            <li
-              key={p.id}
-              style={{
-                fontWeight: p.id === currentPlayer?.id ? "bold" : "normal",
-                marginBottom: 8,
-              }}
-            >
-              <strong>{p.name}</strong>
-              {p.name === user && <span style={{ color: "#666" }}> (you)</span>}
-              <span style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>
-                {p.handCount} cards · {p.score} pts
-                {p.id === currentPlayer?.id && <strong style={{ color: "#2196f3" }}> · current turn</strong>}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <PlayerList
+        players={players}
+        currentPlayerId={currentPlayer?.id}
+        currentUser={user}
+      />
 
-      <section>
-        <h3>Table</h3>
-        <p>Draw pile: {round.drawPileCount ?? 0}</p>
-        <p>Direction: {round.direction === -1 ? "⟲ CCW" : "⟳ CW"}</p>
-        <div>
-          <strong>Discard Top:</strong>
-          {round.discardTop ? <Card card={round.discardTop} /> : <p>None</p>}
-        </div>
-      </section>
+      <GameTable
+        discardTop={round.discardTop}
+        drawPileCount={round.drawPileCount}
+        direction={round.direction}
+      />
 
-      <section>
-        <h3>Your Hand</h3>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {hand.length > 0 ? (
-            hand.map((card, index) => {
-              const playable = isYourTurn && canPlay(card);
-              return (
-                <Card
-                  key={index}
-                  card={card}
-                  onClick={playable ? () => onPlay(index) : undefined}
-                  className={playable ? "clickable" : "disabled"}
-                />
-              );
-            })
-          ) : (
-            <p>You have no cards.</p>
-          )}
-        </div>
-      </section>
+      <PlayerHand
+        hand={hand}
+        isYourTurn={isYourTurn}
+        canPlay={canPlay}
+        onPlayCard={onPlay}
+      />
 
-      <section>
-        <h3>Actions</h3>
-        <button onClick={onDraw} disabled={!isYourTurn}>
-          Draw Card
-        </button>
-        {!isYourTurn && <p>Waiting for your turn...</p>}
-      </section>
+      <GameActions
+        isYourTurn={isYourTurn}
+        onDraw={onDraw}
+      />
 
-      {game.finished && (
-        <section>
-          <h3>Game Over</h3>
-          <p>Winner: {game.winner?.name ?? "—"}</p>
-        </section>
-      )}
+      {game.finished && <GameOver winner={game.winner} />}
     </>
   );
 }

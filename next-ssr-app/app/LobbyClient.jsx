@@ -2,25 +2,13 @@
 
 import * as React from "react";
 import { queryGraphQL, execGraphQL } from "../lib/graphql";
-
-// Cookie helper functions
-function setCookie(name, value, days = 7) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
-}
-
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
-  return null;
-}
+import { getCookie, setCookie, PLAYER_COOKIE } from "../lib/cookies";
 
 export default function LobbyClient({ initialActive, initialPending, initialError }) {
   // Initialize player name from cookie if available
   const [playerName, setPlayerName] = React.useState(() => {
     if (typeof window !== 'undefined') {
-      return getCookie('uno.player') || '';
+      return getCookie(PLAYER_COOKIE) || '';
     }
     return '';
   });
@@ -53,7 +41,7 @@ export default function LobbyClient({ initialActive, initialPending, initialErro
     if (!playerName.trim()) return alert("Enter your name");
     try {
       // Save player name to cookie before creating game
-      setCookie('uno.player', playerName.trim());
+      setCookie(PLAYER_COOKIE, playerName.trim());
       const res = await execGraphQL(
         `
         mutation NewGame($creator: String!, $n: Int!) {
@@ -79,7 +67,7 @@ export default function LobbyClient({ initialActive, initialPending, initialErro
     if (!playerName.trim()) return alert("Enter your name");
     try {
       // Save player name to cookie before joining game
-      setCookie('uno.player', playerName.trim());
+      setCookie(PLAYER_COOKIE, playerName.trim());
       const res = await execGraphQL(
         `
         mutation Join($id: ID!, $player: String!) {
