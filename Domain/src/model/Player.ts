@@ -1,6 +1,3 @@
-import type { Deck } from "./deck";
-import  { drawCard } from "./deck";
-
 import type { Card } from "./UnoCard";
 
 export type Player = {
@@ -19,17 +16,10 @@ export const createPlayer = (id: number, name: string): Player => ({
 
 export const resetHand = (player: Player): Player => ({ ...player, hand: [] });
 
-export const drawCards = (player: Player, deck: Deck, count = 1): [Player, Deck] => {
-  let newHand = [...player.hand];
-  let newDeck = { ...deck };
-
-  for (let i = 0; i < count; i++) {
-    const [card, nextDeck] = drawCard(newDeck);
-    newDeck = nextDeck;
-    if (card) newHand = [...newHand, card];
-  }
-
-  return [{ ...player, hand: newHand }, newDeck];
+export const drawCards = (player: Player, deck: Card[], count = 1): [Player, Card[]] => {
+  const drawn = deck.slice(0, count);
+  const remaining = deck.slice(count);
+  return [{ ...player, hand: [...player.hand, ...drawn] }, remaining];
 };
 
 export const playCard = (player: Player, card: Card): Player => ({

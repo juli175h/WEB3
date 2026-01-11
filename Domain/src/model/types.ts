@@ -1,4 +1,4 @@
-import type { Card, Color } from "../model/UnoCard";
+import type { Card, Color } from "./UnoCard";
 
 export type PlayerState = {
   id: number;

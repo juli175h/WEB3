@@ -1,62 +1,47 @@
-import type { Card, Color } from "./UnoCard";
-import { standardShuffler } from "../utils/random_utils";
+import type { Card, NumberedCard, ReverseCard, SkipCard, DrawTwoCard, WildCard, WildDrawCard, Color } from "../model/UnoCard";
 
-export type Deck = { cards: Card[] };
+export type RNG = (bound: number) => number;
+
 export const colors: Color[] = ["RED", "BLUE", "GREEN", "YELLOW"];
 
-export const createEmptyDeck = (): Deck => ({ cards: [] });
-
-export const createInitialDeck = (): Deck => {
+export function createInitialDeck(): Card[] {
   const cards: Card[] = [];
-
-  // Numbered cards
   for (const color of colors) {
-    cards.push({ type: "NUMBERED", color, value: 0 });
+    cards.push({ type: "NUMBERED", color, value: 0 } as NumberedCard);
     for (let n = 1; n <= 9; n++) {
-      cards.push({
-        type: "NUMBERED",
-        color,
-        value: n as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, // ✅ cast for literal union
-      });
-      cards.push({
-        type: "NUMBERED",
-        color,
-        value: n as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
-      });
+      cards.push({ type: "NUMBERED", color, value: n } as NumberedCard);
+      cards.push({ type: "NUMBERED", color, value: n } as NumberedCard);
     }
   }
-
-  // Action cards
   for (const color of colors) {
-    ["SKIP", "REVERSE", "DRAW"].forEach((type) => {
-      cards.push({ type, color, value: 20 } as Card);
-      cards.push({ type, color, value: 20 } as Card);
-    });
+    cards.push({ type: "SKIP", color, value: 20 } as SkipCard);
+    cards.push({ type: "SKIP", color, value: 20 } as SkipCard);
+    cards.push({ type: "REVERSE", color, value: 20 } as ReverseCard);
+    cards.push({ type: "REVERSE", color, value: 20 } as ReverseCard);
+    cards.push({ type: "DRAW", color, value: 20 } as DrawTwoCard);
+    cards.push({ type: "DRAW", color, value: 20 } as DrawTwoCard);
   }
-
-  // Wild cards
   for (let i = 0; i < 4; i++) {
-    cards.push({ type: "WILD", value: 50 } as Card);
-    cards.push({ type: "WILD DRAW", value: 50 } as Card);
+    cards.push({ type: "WILD", value: 50 } as WildCard);
+    cards.push({ type: "WILD DRAW", value: 50 } as WildDrawCard);
   }
+  return cards;
+}
 
-  // ✅ Shuffle safely and return
-  const shuffled = [...cards];
-  standardShuffler(shuffled);
-  return { cards: shuffled };
-};
+export function shuffle(cards: Card[], rng: RNG): Card[] {
+  // Pure Fisher-Yates shuffle that uses an injected RNG function
+  const out = cards.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng(i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
+}
 
-export const shuffleDeck = (deck: Deck): Deck => {
-  const shuffled = [...deck.cards];
-  standardShuffler(shuffled);
-  return { cards: shuffled };
-};
-
-export const drawCard = (deck: Deck): [Card | undefined, Deck] => {
-  const [first, ...rest] = deck.cards;
-  return [first, { cards: rest }];
-};
-
-export const addCard = (deck: Deck, card: Card): Deck => ({
-  cards: [...deck.cards, card],
-});
+export function deal<T>(arr: T[], count: number): [T[], T[]] {
+  const hand = arr.slice(0, count);
+  const rest = arr.slice(count);
+  return [hand, rest];
+}

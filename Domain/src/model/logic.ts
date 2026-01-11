@@ -1,4 +1,4 @@
-import type { Card, Color } from "../model/UnoCard";
+import type { Card, Color } from "./UnoCard";
 import { createInitialDeck, shuffle, deal, RNG } from "./deck";
 import type { GameState, PlayerState, RoundState } from "./types";
 import { currentRound, withRound } from "./types";

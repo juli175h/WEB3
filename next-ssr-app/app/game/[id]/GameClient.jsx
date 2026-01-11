@@ -45,6 +45,8 @@ export default function GameClient({ initialGame }) {
   // Color picker modal state
   const [colorPickerOpen, setColorPickerOpen] = React.useState(false);
   const [pendingCardIndex, setPendingCardIndex] = React.useState(null);
+  // Drawn card modal state
+  const [drawnCardModal, setDrawnCardModal] = React.useState({ open: false, card: null, cardIndex: null });
 
   // Compute current player and turn status (derived from game state)
   const players = game.players || [];
@@ -214,8 +216,30 @@ export default function GameClient({ initialGame }) {
         `mutation Draw($id: ID!, $player: String!) { draw(id: $id, player: $player) { id } }`,
         { id, player: user }
       );
-      // Refetch hand and game state after drawing
-      await Promise.all([fetchHand(user), fetchGame()]);
+      // Refetch hand to get the new card
+      const handData = await queryGraphQL(
+        `query Hand($id: ID!, $player: String!) {
+          hand(id: $id, player: $player) {
+            __typename
+            ... on NumberedCard { type color value }
+            ... on ReverseCard { type color value }
+            ... on SkipCard { type color value }
+            ... on DrawTwoCard { type color value }
+            ... on WildCard { type color value }
+            ... on WildDrawCard { type color value }
+          }
+        }`,
+        { id, player: user }
+      );
+      const newHand = handData.hand || [];
+      setHand(newHand);
+      // The drawn card is the last card in the hand
+      const drawnCard = newHand[newHand.length - 1];
+      const drawnCardIndex = newHand.length - 1;
+      // Show the drawn card modal
+      setDrawnCardModal({ open: true, card: drawnCard, cardIndex: drawnCardIndex });
+      // Also refresh game state
+      await fetchGame();
     } catch (e) {
       alert(e.message || "Could not draw card.");
     }
@@ -257,6 +281,29 @@ export default function GameClient({ initialGame }) {
     if (pendingCardIndex !== null) {
       onPlay(pendingCardIndex, color);
       setPendingCardIndex(null);
+    }
+  };
+
+  // Handle playing the drawn card
+  const onPlayDrawnCard = () => {
+    const { card, cardIndex } = drawnCardModal;
+    setDrawnCardModal({ open: false, card: null, cardIndex: null });
+    if (card && cardIndex !== null) {
+      onPlay(cardIndex);
+    }
+  };
+
+  // Handle skipping turn after drawing
+  const onSkipAfterDraw = async () => {
+    setDrawnCardModal({ open: false, card: null, cardIndex: null });
+    try {
+      await execGraphQL(
+        `mutation Skip($id: ID!, $player: String!) { skip(id: $id, player: $player) { id } }`,
+        { id, player: user }
+      );
+      await Promise.all([fetchHand(user), fetchGame()]);
+    } catch (e) {
+      alert(e.message || "Could not skip turn.");
     }
   };
 
@@ -321,6 +368,88 @@ export default function GameClient({ initialGame }) {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Drawn Card Modal */}
+      {drawnCardModal.open && drawnCardModal.card && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: 24,
+            borderRadius: 12,
+            textAlign: 'center',
+            minWidth: 280
+          }}>
+            <h3 style={{ marginTop: 0 }}>You drew a card!</h3>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+              <Card card={drawnCardModal.card} />
+            </div>
+            {canPlay(drawnCardModal.card) ? (
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button
+                  onClick={onPlayDrawnCard}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#4caf50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: 16
+                  }}
+                >
+                  Play Card
+                </button>
+                <button
+                  onClick={onSkipAfterDraw}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#9e9e9e',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: 16
+                  }}
+                >
+                  Keep & Skip
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p style={{ color: '#666', marginBottom: 12 }}>This card cannot be played right now.</p>
+                <button
+                  onClick={onSkipAfterDraw}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#2196f3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: 16
+                  }}
+                >
+                  End Turn
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

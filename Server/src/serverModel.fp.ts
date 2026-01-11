@@ -1,7 +1,7 @@
 import type { Color } from "../../Domain/src/model/UnoCard";
-import { newGame as fpNewGame, draw as fpDraw, skip as fpSkip, playCardByIndex as fpPlay, isRoundOver, finishRound } from "../../Domain/src/fp/logic";
+import { newGame as fpNewGame, draw as fpDraw, skip as fpSkip, playCardByIndex as fpPlay, isRoundOver, finishRound } from "../../Domain/src/model/logic";
 import { standardRandomizer } from "../../Domain/src/utils/random_utils";
-import type { GameState } from "../../Domain/src/fp/types";
+import type { GameState } from "../../Domain/src/model/types";
 
 /** Represents a started match with an id (FP-adapted wrapper) */
 export type IndexedUnoMatch = {
