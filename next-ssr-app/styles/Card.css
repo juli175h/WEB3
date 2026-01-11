@@ -7,7 +7,12 @@
 }
 
 .uno-card.clickable:hover {
-  transform: scale(1.08);
+  transform: scale(1.08) translateY(-8px);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.uno-card.clickable {
   cursor: pointer;
 }
 
@@ -16,9 +21,13 @@
 }
 
 .uno-card.disabled {
-  opacity: 0.5;
-  filter: grayscale(40%);
-  pointer-events: none;
+  opacity: 0.6;
+  filter: grayscale(30%);
+  cursor: not-allowed;
+}
+
+.uno-card.disabled:hover {
+  transform: none;
 }
 
 .cards {

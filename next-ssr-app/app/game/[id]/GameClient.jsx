@@ -42,12 +42,39 @@ export default function GameClient({ initialGame }) {
   const [hand, setHand] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+  // Color picker modal state
+  const [colorPickerOpen, setColorPickerOpen] = React.useState(false);
+  const [pendingCardIndex, setPendingCardIndex] = React.useState(null);
 
   // Compute current player and turn status (derived from game state)
   const players = game.players || [];
   const round = game.currentRound || {};
   const currentPlayer = players[round.currentPlayerIndex ?? 0];
   const isYourTurn = user && currentPlayer?.name === user;
+  const discardTop = round.discardTop;
+
+  // Check if a card can be played on the current discard top
+  const canPlay = (card) => {
+    if (!discardTop) return true;
+    // If discard top is a wild with no color set, anything can be played
+    if ((discardTop.type === "WILD" || discardTop.type === "WILD DRAW" ||
+         discardTop.type === "WildCard" || discardTop.type === "WildDrawCard") && !discardTop.color) return true;
+    // Wild cards can always be played
+    if (card.type === "WILD" || card.type === "WILD DRAW" ||
+        card.type === "WildCard" || card.type === "WildDrawCard") return true;
+    // Same type check
+    if (card.type === discardTop.type) {
+      if ((card.type === "NUMBERED" || card.type === "NumberedCard") && 
+          (discardTop.type === "NUMBERED" || discardTop.type === "NumberedCard")) {
+        return card.color === discardTop.color || card.value === discardTop.value;
+      }
+      return true;
+    }
+    // Same color check
+    if (card.color && discardTop.color && 
+        card.color.toUpperCase() === discardTop.color.toUpperCase()) return true;
+    return false;
+  };
 
   // Fetch hand and set up subscriptions
   const fetchHand = React.useCallback(async (forPlayer) => {
@@ -194,17 +221,21 @@ export default function GameClient({ initialGame }) {
     }
   };
 
-  const onPlay = async (cardIndex) => {
+  const onPlay = async (cardIndex, chosenColor = null) => {
     if (!isYourTurn) return;
     const card = hand[cardIndex];
-    let chosenColor;
-    if (card.type === "WildCard" || card.type === "WildDrawCard") {
-      const colorInput = prompt("Choose a color (Red, Green, Blue, Yellow):");
-      const colorMap = { "Red": "RED", "Green": "GREEN", "Blue": "BLUE", "Yellow": "YELLOW" };
-      chosenColor = colorMap[colorInput];
-      if (!chosenColor) {
-        return alert("Invalid color.");
-      }
+    
+    // Check if card can be played
+    if (!canPlay(card)) {
+      return; // Card is not playable
+    }
+    
+    // For wild cards, show color picker if no color chosen yet
+    if ((card.type === "WildCard" || card.type === "WildDrawCard" ||
+         card.type === "WILD" || card.type === "WILD DRAW") && !chosenColor) {
+      setPendingCardIndex(cardIndex);
+      setColorPickerOpen(true);
+      return;
     }
 
     try {
@@ -221,6 +252,14 @@ export default function GameClient({ initialGame }) {
     }
   };
 
+  const onColorSelect = (color) => {
+    setColorPickerOpen(false);
+    if (pendingCardIndex !== null) {
+      onPlay(pendingCardIndex, color);
+      setPendingCardIndex(null);
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
 
   if (error) return (
@@ -233,6 +272,59 @@ export default function GameClient({ initialGame }) {
 
   return (
     <>
+      {/* Color Picker Modal */}
+      {colorPickerOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: 24,
+            borderRadius: 12,
+            textAlign: 'center'
+          }}>
+            <h3 style={{ marginTop: 0 }}>Choose a color</h3>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                onClick={() => onColorSelect('RED')}
+                style={{ width: 60, height: 60, backgroundColor: '#f44336', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+                aria-label="Red"
+              />
+              <button
+                onClick={() => onColorSelect('BLUE')}
+                style={{ width: 60, height: 60, backgroundColor: '#2196f3', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+                aria-label="Blue"
+              />
+              <button
+                onClick={() => onColorSelect('GREEN')}
+                style={{ width: 60, height: 60, backgroundColor: '#4caf50', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+                aria-label="Green"
+              />
+              <button
+                onClick={() => onColorSelect('YELLOW')}
+                style={{ width: 60, height: 60, backgroundColor: '#ffeb3b', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+                aria-label="Yellow"
+              />
+            </div>
+            <button
+              onClick={() => { setColorPickerOpen(false); setPendingCardIndex(null); }}
+              style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <h2>UNO Match #{game.id}</h2>
       <p style={{ marginBottom: 16 }}>Playing as: <strong>{user}</strong></p>
 
@@ -244,36 +336,15 @@ export default function GameClient({ initialGame }) {
               key={p.id}
               style={{
                 fontWeight: p.id === currentPlayer?.id ? "bold" : "normal",
-                marginBottom: 12,
+                marginBottom: 8,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div>
-                  <strong>{p.name}</strong>
-                  <div style={{ fontSize: 12, color: "#666" }}>
-                    (cards: {p.handCount} · score: {p.score}{p.id === currentPlayer?.id ? " · current turn" : ""})
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 6 }}>
-                  {/* If this is the local user, show their actual hand (if available);
-                      otherwise show a simple message. For other players always show
-                      face-down placeholders so we don't leak card info. */}
-                  {p.name === user ? (
-                    hand.length > 0 ? (
-                      hand.map((c, i) => (
-                        <Card key={i} card={c} onClick={isYourTurn ? () => onPlay(i) : undefined} />
-                      ))
-                    ) : (
-                      <div style={{ fontStyle: "italic", color: "#666" }}>You have no cards.</div>
-                    )
-                  ) : (
-                    Array.from({ length: p.handCount }).map((_, i) => (
-                      <Card key={i} faceDown />
-                    ))
-                  )}
-                </div>
-              </div>
+              <strong>{p.name}</strong>
+              {p.name === user && <span style={{ color: "#666" }}> (you)</span>}
+              <span style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>
+                {p.handCount} cards · {p.score} pts
+                {p.id === currentPlayer?.id && <strong style={{ color: "#2196f3" }}> · current turn</strong>}
+              </span>
             </li>
           ))}
         </ul>
@@ -291,16 +362,19 @@ export default function GameClient({ initialGame }) {
 
       <section>
         <h3>Your Hand</h3>
-        <div style={{ display: "flex", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {hand.length > 0 ? (
-            hand.map((card, index) => (
-              <Card
-                key={index}
-                card={card}
-                onClick={() => onPlay(index)}
-                className={isYourTurn ? "clickable" : "disabled"}
-              />
-            ))
+            hand.map((card, index) => {
+              const playable = isYourTurn && canPlay(card);
+              return (
+                <Card
+                  key={index}
+                  card={card}
+                  onClick={playable ? () => onPlay(index) : undefined}
+                  className={playable ? "clickable" : "disabled"}
+                />
+              );
+            })
           ) : (
             <p>You have no cards.</p>
           )}
