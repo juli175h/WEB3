@@ -73,6 +73,17 @@ export const LOBBY_QUERY = `
   }
 `;
 
+export const PENDING_GAMES_SUBSCRIPTION = `
+  subscription PendingGamesSub {
+    pendingGames {
+      id
+      pending
+      number_of_players
+      players
+    }
+  }
+`;
+
 export const DRAW_MUTATION = `
   mutation Draw($id: ID!, $player: String!) {
     draw(id: $id, player: $player) { id }

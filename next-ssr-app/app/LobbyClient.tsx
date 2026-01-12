@@ -6,6 +6,8 @@ import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { setUser } from "../store/userSlice";
 import { setActiveGames, setPendingGames, setError, fetchLobby, createGame, joinGame } from "../store/gameSlice";
 import { Game, PendingGame } from "../store/types";
+import { subscribeGraphQL$ } from "../lib/graphql";
+import { PENDING_GAMES_SUBSCRIPTION } from "../store/queries";
 
 interface LobbyClientProps {
   initialActive: Game[];
@@ -38,6 +40,24 @@ export default function LobbyClient({ initialActive, initialPending, initialErro
     dispatch(setPendingGames(initialPending || []));
     if (initialError) dispatch(setError(initialError));
   }, [initialActive, initialPending, initialError, dispatch]);
+
+  // Subscribe to pending games updates (RxJS)
+  React.useEffect(() => {
+    const subscription = subscribeGraphQL$<{ pendingGames: PendingGame[] }>(
+      PENDING_GAMES_SUBSCRIPTION
+    ).subscribe({
+      next: (data) => {
+        if (data?.pendingGames) {
+          dispatch(setPendingGames(data.pendingGames));
+        }
+      },
+      error: (err) => {
+        console.error("Pending games subscription error:", err);
+      },
+    });
+
+    return () => subscription.unsubscribe();
+  }, [dispatch]);
 
   // Sync player name with Redux
   React.useEffect(() => {

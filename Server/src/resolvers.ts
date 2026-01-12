@@ -35,6 +35,9 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
       async new_game(_: any, { creator, number_of_players }: { creator: string; number_of_players: number }) {
         const game = await api.new_game(creator, number_of_players);
         pubsub.publish("PENDING_UPDATED", { pending: game });
+        // Notify lobby subscribers of the updated list
+        const allPending = await api.pending_games();
+        pubsub.publish("PENDING_GAMES_UPDATED", { pendingGames: allPending });
         return game;
       },
 
@@ -49,6 +52,9 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
           pubsub.publish("PENDING_UPDATED", { pending: { id, __gone: true } });
           pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(game as IndexedUnoMatch) });
         }
+        // Notify lobby subscribers of the updated list
+        const allPending = await api.pending_games();
+        pubsub.publish("PENDING_GAMES_UPDATED", { pendingGames: allPending });
         return game;
       },
 
@@ -139,6 +145,9 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
           if (payload.pending?.__gone) return null;
           return payload.pending;
         },
+      },
+      pendingGames: {
+        subscribe: () => pubsub.asyncIterator(["PENDING_GAMES_UPDATED"]),
       },
     },
   };
