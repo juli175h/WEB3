@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import { subscribeGraphQL } from "../../../lib/graphql";
+import { filter, tap } from "rxjs";
+import { subscribeGraphQL$ } from "../../../lib/graphql";
 import { getCookie, PLAYER_COOKIE } from "../../../lib/cookies";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { setUser } from "../../../store/userSlice";
@@ -92,42 +93,30 @@ export default function GameClient({ initialGame }: GameClientProps) {
     dispatch(fetchHand({ id, player: user }));
   }, [id, user, dispatch]);
 
-  // Subscribe to game updates
+  // Subscribe to game updates using RxJS
   React.useEffect(() => {
     if (!id) return;
-    let unsub: (() => void) | null = null;
-    let cancelled = false;
 
-    (async () => {
-      try {
-        const sub = await subscribeGraphQL(
-          ACTIVE_SUBSCRIPTION,
-          {},
-          {
-            next: (payload: any) => {
-              if (cancelled) return;
-              const active = payload?.active;
-              if (active && active.id === id) {
-                dispatch(setGame(active));
-                // Refetch hand when game updates
-                if (user) dispatch(fetchHand({ id, player: user }));
-              }
-            },
-            error: (err: any) => {
-              console.warn("Game subscription error:", err);
-            },
-          }
-        );
-        unsub = sub?.unsubscribe;
-      } catch (err) {
-        console.warn("Could not subscribe to game updates:", err);
-      }
-    })();
+    const subscription = subscribeGraphQL$<{ active: Game }>(
+      ACTIVE_SUBSCRIPTION,
+      {}
+    ).pipe(
+      tap((payload) => console.debug("Game subscription payload:", payload)),
+      filter((payload): payload is { active: Game } => 
+        payload?.active != null && payload.active.id === id
+      )
+    ).subscribe({
+      next: (payload) => {
+        dispatch(setGame(payload.active));
+        // Refetch hand when game updates
+        if (user) dispatch(fetchHand({ id, player: user }));
+      },
+      error: (err) => {
+        console.warn("Game subscription error:", err);
+      },
+    });
 
-    return () => {
-      cancelled = true;
-      try { unsub?.(); } catch (e) {}
-    };
+    return () => subscription.unsubscribe();
   }, [id, user, dispatch]);
 
   const onDraw = async () => {

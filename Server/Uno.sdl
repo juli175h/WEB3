@@ -106,6 +106,6 @@ type Mutation {
 }
 
 type Subscription {
-  active: ActiveMatch!
-  pending: PendingGame!
+  active: ActiveMatch
+  pending(id: ID!): PendingGame
 }

@@ -1,92 +1,84 @@
 "use client";
 
 import * as React from "react";
-import { subscribeGraphQL } from "../../../lib/graphql";
+import { merge, tap } from "rxjs";
+import { subscribeGraphQL$ } from "../../../lib/graphql";
+
+// Subscription queries
+const PENDING_SUBSCRIPTION = `
+  subscription PendingSub($id: ID!) {
+    pending(id: $id) {
+      id
+      pending
+      creator
+      players
+      number_of_players
+    }
+  }
+`;
+
+const ACTIVE_SUBSCRIPTION = `
+  subscription ActiveSub {
+    active {
+      id
+      pending
+      players { id name }
+    }
+  }
+`;
 
 export default function PendingClient({ initialPending, initialError }) {
   const [pending, setPending] = React.useState(initialPending);
   const [error, setError] = React.useState(initialError);
 
-  // Subscribe to updates - skip initial fetch since we have initialPending from SSR
+  // Subscribe to updates using RxJS
   React.useEffect(() => {
     if (!pending?.id) return;
-    let cancelled = false;
-    let unsub = null;
+    const gameId = pending.id;
 
-    (async () => {
-      // Skip initial fetch - we already have data from props
-      // Just set up subscriptions for real-time updates
+    // Create observables for both subscriptions
+    const pending$ = subscribeGraphQL$<{ pending: typeof pending | null }>(
+      PENDING_SUBSCRIPTION,
+      { id: gameId }
+    ).pipe(
+      tap((payload) => console.debug("Pending subscription payload:", payload))
+    );
 
-      try {
-        const sub = await subscribeGraphQL(
-          `
-          subscription PendingSub($id: ID!) {
-            pending(id: $id) {
-              id
-              pending
-              creator
-              players
-              number_of_players
-            }
+    const active$ = subscribeGraphQL$<{ active: { id: string } | null }>(
+      ACTIVE_SUBSCRIPTION,
+      {}
+    ).pipe(
+      tap((payload) => console.debug("Active subscription payload:", payload))
+    );
+
+    // Merge both streams and handle updates
+    const subscription = merge(pending$, active$).subscribe({
+      next: (payload) => {
+        // Handle pending game updates
+        if (payload && "pending" in payload) {
+          const pg = payload.pending;
+          if (!pg) {
+            // lobby gone → redirect to the active game page
+            window.location.assign(`/game/${gameId}`);
+            return;
           }
-        `,
-          { id: pending.id },
-          {
-            next: (payload) => {
-              console.debug("Pending subscription payload:", payload);
-              if (cancelled) return;
-              const pg = payload?.pending ?? null;
-              if (!pg) {
-                // lobby gone → redirect to the active game page (same id)
-                window.location.assign(`/game/${pending.id}`);
-                return;
-              }
-              setPending(pg);
-            },
-            error: (err) => {
-              console.warn("Subscription failed:", err);
-            },
+          setPending(pg);
+        }
+        
+        // Handle active game updates (game started)
+        if (payload && "active" in payload) {
+          const active = payload.active;
+          if (active && active.id === gameId) {
+            window.location.assign(`/game/${gameId}`);
           }
-        );
-        unsub = sub?.unsubscribe || (() => {});
-      } catch (err) {
-        console.warn("Could not open subscription", err);
-      }
+        }
+      },
+      error: (err) => {
+        console.warn("Subscription error:", err);
+      },
+    });
 
-      // also subscribe to active matches so we catch the match start
-      try {
-        const activeSub = await subscribeGraphQL(
-          `subscription ActiveSub { active { id pending players { id name } } }`,
-          {},
-          {
-            next: (payload) => {
-              console.debug("Active subscription payload:", payload);
-              if (cancelled) return;
-              const active = payload?.active ?? null;
-              if (active && active.id === pending.id) {
-                window.location.assign(`/game/${pending.id}`);
-              }
-            },
-            error: (err) => {
-              console.warn("Active subscription failed:", err);
-            },
-          }
-        );
-        const activeUnsub = activeSub?.unsubscribe || (() => {});
-        const oldUnsub = unsub;
-        unsub = () => {
-          try { oldUnsub?.(); } catch (e) {}
-          try { activeUnsub?.(); } catch (e) {}
-        };
-      } catch (err) {
-        console.warn("Could not open active subscription", err);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      try { unsub?.(); } catch (e) {}
-    };
+    return () => subscription.unsubscribe();
   }, [pending?.id]);
 
   if (error) return <p style={{ color: "crimson" }}>{error}</p>;

@@ -1,4 +1,4 @@
-import { PubSub } from "graphql-subscriptions";
+import { PubSub, withFilter } from "graphql-subscriptions";
 import { API, toGraphQLMatch } from "./api";
 import { IndexedUnoMatch, PendingGame } from "./serverModel.fp";
 import {Color} from "../../Domain/src/model/UnoCard";
@@ -40,10 +40,15 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
 
       async join(_: any, { id, player }: { id: string; player: string }) {
         const game = await api.join(id, player);
-        pubsub.publish(game.pending ? "PENDING_UPDATED" : "ACTIVE_UPDATED", {
-          pending: game.pending ? game : undefined,
-          active: !game.pending ? toGraphQLMatch(game as IndexedUnoMatch) : undefined,
-        });
+        if (game.pending) {
+          // Still in lobby - notify pending subscribers
+          pubsub.publish("PENDING_UPDATED", { pending: game });
+        } else {
+          // Game started - notify both channels
+          // Pending subscribers need to know the lobby is gone (pending: null with id for filter)
+          pubsub.publish("PENDING_UPDATED", { pending: { id, __gone: true } });
+          pubsub.publish("ACTIVE_UPDATED", { active: toGraphQLMatch(game as IndexedUnoMatch) });
+        }
         return game;
       },
 
@@ -122,7 +127,18 @@ export const create_resolvers = (pubsub: PubSub, api: API) => {
         subscribe: () => pubsub.asyncIterator(["ACTIVE_UPDATED"]),
       },
       pending: {
-        subscribe: () => pubsub.asyncIterator(["PENDING_UPDATED"]),
+        subscribe: withFilter(
+          () => pubsub.asyncIterator(["PENDING_UPDATED"]),
+          (payload, variables) => {
+            // Filter by game ID
+            return payload.pending?.id === variables.id;
+          }
+        ),
+        resolve: (payload: any) => {
+          // If the game is marked as gone, return null to signal "lobby closed"
+          if (payload.pending?.__gone) return null;
+          return payload.pending;
+        },
       },
     },
   };
