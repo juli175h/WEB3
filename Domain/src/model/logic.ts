@@ -2,11 +2,12 @@ import type { Card, Color } from "./UnoCard";
 import { createInitialDeck, shuffle, deal, RNG } from "./deck";
 import type { GameState, PlayerState, RoundState } from "./types";
 import { currentRound, withRound } from "./types";
+import * as _ from 'lodash/fp';
 
 const WINNING_SCORE = 500;
 
 export function newGame(playerNames: string[], rng?: RNG): GameState {
-  const players: PlayerState[] = playerNames.map((n, i) => ({ id: i, name: n, score: 0, hand: [] }));
+  const players: PlayerState[] = playerNames.map((n, i) => ({ id: i, name: n, score: 0, hand: [] as Card[] }));
   const deck = rng ? shuffle(createInitialDeck(), rng) : createInitialDeck();
   const [afterDeal, dealtPlayers] = dealInitialHands(players, deck);
   const [discardTop, drawPile] = dealFirstCard(afterDeal);
@@ -19,19 +20,21 @@ export function newGame(playerNames: string[], rng?: RNG): GameState {
   return { players: dealtPlayers, rounds: [round], finished: false, winner: null };
 }
 
-function dealInitialHands(players: PlayerState[], deck: Card[]): [Card[], PlayerState[]] {
-  let remaining = deck.slice();
-  const nextPlayers = players.map(p => ({ ...p, hand: [] as Card[] }));
-  for (let i = 0; i < 7; i++) {
-    for (let pi = 0; pi < nextPlayers.length; pi++) {
-      const c = remaining.shift();
-      if (c) nextPlayers[pi].hand.push(c);
+function dealInitialHands(players: PlayerState[], deck: ReadonlyArray<Card>): [ReadonlyArray<Card>, ReadonlyArray<PlayerState>] {
+  const pCount = players.length;
+  const hands: PlayerState[] = players.map((p, pi) => {
+    const hand: Card[] = [];
+    for (let j = 0; j < 7; j++) {
+      const pos = j * pCount + pi;
+      if (pos < deck.length) hand.push(deck[pos]);
     }
-  }
-  return [remaining, nextPlayers];
+    return { ...p, hand };
+  });
+  const remaining = deck.slice(pCount * 7);
+  return [remaining, hands];
 }
 
-function dealFirstCard(deck: Card[]): [Card | undefined, Card[]] {
+function dealFirstCard(deck: ReadonlyArray<Card>): [Card | undefined, ReadonlyArray<Card>] {
   // Prefer a non-wild card as the starting discard. If none exists, fall back
   // to the first card (and if that card is a wild, leave its color unset).
   const copy = deck.slice();
@@ -75,9 +78,8 @@ export function draw(g: GameState, playerName: string): GameState {
   const drawPile = r.drawPile.slice();
   const card = drawPile.shift();
   if (!card) return g;
-  const nextPlayers = g.players.slice();
-  nextPlayers[pIdx] = { ...player, hand: player.hand.concat(card) };
-  return withRound({ ...g, players: nextPlayers }, { ...r, drawPile });
+  const players = g.players.map((pl, idx) => idx === pIdx ? { ...pl, hand: pl.hand.concat(card) } : pl);
+  return withRound({ ...g, players }, { ...r, drawPile });
 }
 
 export function skip(g: GameState): GameState {
@@ -94,18 +96,15 @@ export function playCardByIndex(g: GameState, handIndex: number, chosenColor?: C
   if (!canPlay(card, r.discard[r.discard.length - 1])) throw new Error("Illegal move");
 
   // remove card from hand
-  const newHand = player.hand.slice();
-  newHand.splice(handIndex, 1);
+  const newHand = player.hand.filter((_, i) => i !== handIndex);
   // prepare discard card (apply chosenColor for wilds)
-  const toDiscard: Card = { ...card } as any;
-  if ((toDiscard.type === "WILD" || toDiscard.type === "WILD DRAW") && chosenColor) {
-    (toDiscard as any).color = chosenColor;
-  }
+  const toDiscard: Card = ((card.type === "WILD" || card.type === "WILD DRAW") && chosenColor)
+    ? ({ ...(card as any), color: chosenColor } as Card)
+    : ({ ...card } as Card);
   // push to discard
   const discard = r.discard.concat(toDiscard);
-  // apply effects
-  let g2 = withRound({ ...g, players: g.players.slice() }, { ...r, discard });
-  g2.players[pIdx] = { ...player, hand: newHand };
+  const playersAfterPlay = g.players.map((pl, idx) => idx === pIdx ? { ...pl, hand: newHand } : pl);
+  let g2 = withRound({ ...g, players: playersAfterPlay }, { ...r, discard });
   g2 = applyEffect(g2, toDiscard);
   // advance turn
   const r2 = currentRound(g2);
@@ -130,8 +129,7 @@ function applyEffect(g: GameState, card: Card): GameState {
     case "DRAW": {
       const target = nextIndex(r, n);
       const [two, rest] = drawN(r.drawPile, 2);
-      const players = g.players.slice();
-      players[target] = { ...players[target], hand: players[target].hand.concat(two) };
+      const players = g.players.map((pl, idx) => idx === target ? { ...pl, hand: pl.hand.concat(two) } : pl);
       g = { ...g, players };
       // set currentPlayerIndex to the target so the normal turn-advance
       // performed after play will skip the target player
@@ -141,8 +139,7 @@ function applyEffect(g: GameState, card: Card): GameState {
     case "WILD DRAW": {
       const target = nextIndex(r, n);
       const [four, rest] = drawN(r.drawPile, 4);
-      const players = g.players.slice();
-      players[target] = { ...players[target], hand: players[target].hand.concat(four) };
+      const players = g.players.map((pl, idx) => idx === target ? { ...pl, hand: pl.hand.concat(four) } : pl);
       g = { ...g, players };
       // set currentPlayerIndex to the target so the normal turn-advance
       // performed after play will skip the target player
@@ -157,7 +154,7 @@ function applyEffect(g: GameState, card: Card): GameState {
   return withRound(g, r2);
 }
 
-function drawN(deck: Card[], n: number): [Card[], Card[]] {
+function drawN(deck: ReadonlyArray<Card>, n: number): [ReadonlyArray<Card>, ReadonlyArray<Card>] {
   const drawn = deck.slice(0, n);
   const rest = deck.slice(n);
   return [drawn, rest];
@@ -174,7 +171,11 @@ export function finishRound(g: GameState, rng?: RNG): GameState {
   const players = g.players.map(p => (p === winner ? { ...p, score: p.score + points } : p));
   if (players.find(p => p.score >= WINNING_SCORE)) {
     const w = players.reduce((a, b) => (a.score >= b.score ? a : b));
-    return { ...g, players, finished: true, winner: { id: w.id, name: w.name, score: w.score } };
+    return _.flow([
+      _.set('players', players),
+      _.set('finished', true),
+      _.set('winner', { id: w.id, name: w.name, score: w.score })
+    ])(g) as GameState;
   }
   // start new round; use provided rng to shuffle or leave deterministic
   const deck = rng ? shuffle(createInitialDeck(), rng) : createInitialDeck();
@@ -189,6 +190,6 @@ export function finishRound(g: GameState, rng?: RNG): GameState {
   return { ...g, players: dealtPlayers, rounds: g.rounds.concat(newRound) };
 }
 
-function handPoints(hand: Card[]): number {
+function handPoints(hand: ReadonlyArray<Card>): number {
   return hand.reduce((sum, c) => sum + (c.value as number), 0);
 }

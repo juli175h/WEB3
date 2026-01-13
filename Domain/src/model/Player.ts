@@ -1,22 +1,22 @@
 import type { Card } from "./UnoCard";
 
-export type Player = {
+export type Player = Readonly<{
   id: number;
   name: string;
-  hand: Card[];
+  hand: ReadonlyArray<Card>;
   score: number;
-};
+}>;
 
 export const createPlayer = (id: number, name: string): Player => ({
   id,
   name,
-  hand: [],
+  hand: [] as ReadonlyArray<Card>,
   score: 0,
 });
 
-export const resetHand = (player: Player): Player => ({ ...player, hand: [] });
+export const resetHand = (player: Player): Player => ({ ...player, hand: [] as ReadonlyArray<Card> });
 
-export const drawCards = (player: Player, deck: Card[], count = 1): [Player, Card[]] => {
+export const drawCards = (player: Player, deck: ReadonlyArray<Card>, count = 1): [Player, ReadonlyArray<Card>] => {
   const drawn = deck.slice(0, count);
   const remaining = deck.slice(count);
   return [{ ...player, hand: [...player.hand, ...drawn] }, remaining];

@@ -9,12 +9,12 @@ export type IndexedUnoMatch = {
   pending: false;
   finished: boolean;
   winner?: { id: number; name: string; score: number } | null;
-  players: Array<{ id: number; name: string; score: number; hand: { length: number; cards: any[] } }>;
+  players: Array<{ id: number; name: string; score: number; hand: { length: number; cards: ReadonlyArray<any> } }>;
   currentRound: {
     currentPlayerIndex: number;
     playDirection: number;
     discardPile: { top: () => any | null };
-    drawPile: { size: number; cards?: any[] };
+    drawPile: { size: number; cards?: ReadonlyArray<any> };
     roundIndex: number;
   } | null;
 };

@@ -10,7 +10,7 @@ export interface API {
   game(id: string): Promise<IndexedUnoMatch | undefined>;
   pending_games(): Promise<PendingGame[]>;
   pending_game(id: string): Promise<PendingGame | undefined>;
-  hand(id: string, player: string): Promise<any[]>;
+  hand(id: string, player: string): Promise<ReadonlyArray<any>>;
   skip(id: string, player: string): Promise<IndexedUnoMatch>;
 }
 

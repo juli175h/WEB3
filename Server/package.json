@@ -9,6 +9,7 @@
     "start": "node dist/Server/src/gameServer.js"
   },
   "dependencies": {
+    "lodash": "^4.17.21",
     "graphql": "^16.11.0",
     "graphql-subscriptions": "^2.0.0",
     "@apollo/server": "^4.5.0",

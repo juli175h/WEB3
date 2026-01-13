@@ -2,9 +2,9 @@ import type { Card, NumberedCard, ReverseCard, SkipCard, DrawTwoCard, WildCard, 
 
 export type RNG = (bound: number) => number;
 
-export const colors: Color[] = ["RED", "BLUE", "GREEN", "YELLOW"];
+export const colors: ReadonlyArray<Color> = ["RED", "BLUE", "GREEN", "YELLOW"];
 
-export function createInitialDeck(): Card[] {
+export function createInitialDeck(): ReadonlyArray<Card> {
   const cards: Card[] = [];
   for (const color of colors) {
     cards.push({ type: "NUMBERED", color, value: 0 } as NumberedCard);
@@ -28,7 +28,7 @@ export function createInitialDeck(): Card[] {
   return cards;
 }
 
-export function shuffle(cards: Card[], rng: RNG): Card[] {
+export function shuffle(cards: ReadonlyArray<Card>, rng: RNG): ReadonlyArray<Card> {
   // Pure Fisher-Yates shuffle that uses an injected RNG function
   const out = cards.slice();
   for (let i = out.length - 1; i > 0; i--) {
@@ -40,7 +40,7 @@ export function shuffle(cards: Card[], rng: RNG): Card[] {
   return out;
 }
 
-export function deal<T>(arr: T[], count: number): [T[], T[]] {
+export function deal<T>(arr: ReadonlyArray<T>, count: number): [ReadonlyArray<T>, ReadonlyArray<T>] {
   const hand = arr.slice(0, count);
   const rest = arr.slice(count);
   return [hand, rest];
